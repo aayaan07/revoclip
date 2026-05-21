@@ -1,33 +1,43 @@
 import ast
+from datetime import datetime
 import json
 import os
 import re
+import uuid
 from typing import Any
 
 from dotenv import load_dotenv
 
+from config import DEBUG_SAVE_AI_RESPONSE, TEMP_DIR
+
 load_dotenv()
 
 ERROR_MESSAGES = {
-    "groq_auth":               "❌ Groq API key is invalid or missing. Check GROQ_API_KEY in your .env file.",
-    "groq_ratelimit":          "⏳ Groq rate limit hit. Wait a moment and try again, or switch to OpenRouter.",
-    "groq_model_not_found":    "❌ Groq model not found. Check the model name — try 'llama-3.1-8b-instant'.",
-    "groq_timeout":            "⏱️ Groq request timed out. Try again or switch provider.",
-    "groq_network":            "🌐 Cannot reach Groq. Check your internet connection.",
-    "openrouter_auth":         "❌ OpenRouter API key is invalid or missing. Check OPENROUTER_API_KEY in your .env file.",
-    "openrouter_ratelimit":    "⏳ OpenRouter rate limit hit. Wait a moment and try again.",
-    "openrouter_credits":      "💳 OpenRouter account has no credits. Add credits at openrouter.ai or use a free model.",
+    "groq_auth": "❌ Groq API key is invalid or missing. Check GROQ_API_KEY in your .env file.",
+    "groq_ratelimit": "⏳ Groq rate limit hit. Wait a moment and try again, or switch to OpenRouter.",
+    "groq_model_not_found": "❌ Groq model not found. Check the model name — try 'llama-3.1-8b-instant'.",
+    "groq_timeout": "⏱️ Groq request timed out. Try again or switch provider.",
+    "groq_network": "🌐 Cannot reach Groq. Check your internet connection.",
+    "gemini_auth": "❌ Google API key is invalid or missing.",
+    "gemini_ratelimit": "⏳ Gemini rate limit hit. Wait a moment and try again.",
+    "gemini_model_not_found": "❌ Gemini model not found. Check the model name — try 'gemini-2.0-flash'.",
+    "gemini_server": "🔧 Gemini server error. Try again in a moment.",
+    "gemini_network": "🌐 Cannot reach Gemini. Check your internet connection.",
+    "gemini_timeout": "⏱️ Gemini request timed out. Try again or switch provider.",
+    "openrouter_auth": "❌ OpenRouter API key is invalid or missing. Check OPENROUTER_API_KEY in your .env file.",
+    "openrouter_ratelimit": "⏳ OpenRouter rate limit hit. Wait a moment and try again.",
+    "openrouter_credits": "💳 OpenRouter account has no credits. Add credits at openrouter.ai or use a free model.",
     "openrouter_model_not_found": "❌ OpenRouter model not found. Check the model name at openrouter.ai/models.",
-    "openrouter_server":       "🔧 OpenRouter server error. Try again in a moment.",
-    "openrouter_network":      "🌐 Cannot reach OpenRouter. Check your internet connection.",
-    "openrouter_timeout":      "⏱️ OpenRouter request timed out. Try again or switch provider.",
-    "ollama_not_running":      "❌ Ollama is not running. Start it with: ollama serve",
-    "ollama_model_not_found":  "❌ Ollama model not found. Pull it first with: ollama pull <model-name>",
-    "ollama_server":           "🔧 Ollama server error. Restart Ollama and try again.",
-    "ollama_timeout":          "⏱️ Ollama timed out. The model may be too large or your machine too slow.",
-    "parse_failed":            "❌ AI returned an invalid response format. Try again, switch model, or switch provider.",
-    "no_valid_clips":          "❌ AI returned clips, but none had usable start/end timestamps. Try a different model or provider.",
-    "unknown_provider":        "❌ Unknown AI provider selected. Choose Groq, OpenRouter, or Ollama.",
+    "openrouter_server": "🔧 OpenRouter server error. Try again in a moment.",
+    "openrouter_network": "🌐 Cannot reach OpenRouter. Check your internet connection.",
+    "openrouter_timeout": "⏱️ OpenRouter request timed out. Try again or switch provider.",
+    "ollama_not_running": "❌ Ollama is not running. Start it with: ollama serve",
+    "ollama_model_not_found": "❌ Ollama model not found. Pull it first with: ollama pull <model-name>",
+    "ollama_server": "🔧 Ollama server error. Restart Ollama and try again.",
+    "ollama_timeout": "⏱️ Ollama timed out. The model may be too large or your machine too slow.",
+    "parse_failed": "❌ AI returned an invalid response format. Try again, switch model, or switch provider.",
+    "no_valid_clips": "❌ AI returned clips, but none had usable start/end timestamps. Try a different model or provider.",
+    "unknown_provider": "❌ Unknown AI provider selected. Choose Groq, Gemini, OpenRouter, or Ollama.",
 }
 
 
@@ -38,8 +48,25 @@ class HighlightDetector:
         self.model = model
         self.api_keys = {
             "groq": api_keys.get("groq") or os.environ.get("GROQ_API_KEY", ""),
+            "gemini": api_keys.get("gemini") or os.environ.get("GOOGLE_API_KEY", ""),
             "openrouter": api_keys.get("openrouter") or os.environ.get("OPENROUTER_API_KEY", ""),
         }
+
+    def _save_debug_response(self, raw_response):
+        if not DEBUG_SAVE_AI_RESPONSE:
+            return
+        try:
+            TEMP_DIR.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            suffix = uuid.uuid4().hex[:8]
+            path = TEMP_DIR / f"ai_response_{self.provider_key}_{timestamp}_{suffix}.txt"
+            if isinstance(raw_response, str):
+                content = raw_response
+            else:
+                content = json.dumps(raw_response, ensure_ascii=False, indent=2)
+            path.write_text(content, encoding="utf-8")
+        except Exception:
+            pass
 
     def find_highlights(
         self,
@@ -58,6 +85,8 @@ class HighlightDetector:
             clips = None
             if self.provider_key == "groq":
                 clips = self._call_groq(messages)
+            elif self.provider_key == "gemini":
+                clips = self._call_gemini(messages)
             elif self.provider_key == "openrouter":
                 clips = self._call_openrouter(messages)
             elif self.provider_key == "ollama":
@@ -80,8 +109,7 @@ class HighlightDetector:
             lines.append(word["word"])
         return " ".join(lines)
 
-    def _build_messages(self, transcript, num_clips, min_dur, max_dur,
-                        user_guidance, include_hook):
+    def _build_messages(self, transcript, num_clips, min_dur, max_dur, user_guidance, include_hook):
         guidance_block = (
             f"Additional clip guidance from the user: {user_guidance.strip()}\n\n"
             if user_guidance.strip() else ""
@@ -118,9 +146,16 @@ class HighlightDetector:
                 "content": (
                     "You are an expert short-form video editor who specializes "
                     "in creating viral clips. Your job is to find self-contained, "
-                    "emotionally complete moments from transcripts. "
-                    "Respond ONLY in valid JSON array. "
-                    "No explanation, no markdown, no backticks."
+                    "emotionally complete moments from transcripts.\n\n"
+                    "OUTPUT FORMAT RULES — CRITICAL:\n"
+                    "- Your ENTIRE response must be a single valid JSON array.\n"
+                    "- Start your response with [ and end with ].\n"
+                    "- No text before the [. No text after the ].\n"
+                    "- No markdown. No backticks. No code fences. No explanation.\n"
+                    "- No preamble like 'Here are the clips:' or 'Sure! Here is...'.\n"
+                    "- If you add ANY text outside the JSON array, the entire "
+                    "response will be rejected and the user's video will fail.\n"
+                    "- ONLY output the raw JSON array. Nothing else."
                 ),
             },
             {
@@ -153,8 +188,9 @@ class HighlightDetector:
                     "like 'um', 'so', 'and', 'but' as the very first word.\n\n"
                     f"{hook_instruction}"
                     f"{guidance_block}"
-                    "Return ONLY a JSON array:\n"
-                    f"{example}\n\n"
+                    "REMEMBER: Respond with ONLY the JSON array. "
+                    "Start with [ and end with ]. No other text.\n\n"
+                    f"Example of EXACT required format:\n{example}\n\n"
                     f"Transcript:\n{transcript}"
                 ),
             },
@@ -172,7 +208,9 @@ class HighlightDetector:
                 response_format={"type": "json_object"},
                 timeout=60,
             )
-            return self._parse(response.choices[0].message.content)
+            content = response.choices[0].message.content
+            self._save_debug_response(content)
+            return self._parse(content)
         except AuthenticationError:
             raise RuntimeError("groq_auth")
         except RateLimitError:
@@ -193,6 +231,103 @@ class HighlightDetector:
             if "connect" in msg or "network" in msg:
                 raise RuntimeError("groq_network")
             raise
+
+    def _call_gemini(self, messages):
+        import requests
+
+        try:
+            api_key = self.api_keys.get("gemini", "").strip()
+            if not api_key:
+                raise RuntimeError("gemini_auth")
+
+            system_parts = []
+            contents = []
+            for message in messages:
+                role = str(message.get("role", "")).strip().lower()
+                content = str(message.get("content", "")).strip()
+                if not content:
+                    continue
+                if role == "system":
+                    system_parts.append({"text": content})
+                    continue
+                contents.append(
+                    {
+                        "role": "model" if role == "assistant" else "user",
+                        "parts": [{"text": content}],
+                    }
+                )
+
+            payload = {
+                "contents": contents,
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                },
+            }
+            if system_parts:
+                payload["systemInstruction"] = {"parts": system_parts}
+
+            response = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
+                params={"key": api_key},
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=60,
+            )
+            if response.status_code == 400:
+                detail = response.text.lower()
+                if "api key" in detail or "authentication" in detail:
+                    raise RuntimeError("gemini_auth")
+                if "model" in detail and ("not found" in detail or "unsupported" in detail):
+                    raise RuntimeError("gemini_model_not_found")
+            if response.status_code in (401, 403):
+                raise RuntimeError("gemini_auth")
+            if response.status_code == 404:
+                raise RuntimeError("gemini_model_not_found")
+            if response.status_code == 429:
+                raise RuntimeError("gemini_ratelimit")
+            if response.status_code >= 500:
+                raise RuntimeError("gemini_server")
+            response.raise_for_status()
+
+            data = response.json()
+            if "error" in data:
+                err = data["error"]
+                status = str(err.get("status", "")).upper()
+                err_msg = str(err.get("message", "")).lower()
+                if status in {"UNAUTHENTICATED", "PERMISSION_DENIED"} or "api key" in err_msg:
+                    raise RuntimeError("gemini_auth")
+                if status == "RESOURCE_EXHAUSTED" or "rate" in err_msg or "quota" in err_msg:
+                    raise RuntimeError("gemini_ratelimit")
+                if status == "NOT_FOUND" or ("model" in err_msg and "not found" in err_msg):
+                    raise RuntimeError("gemini_model_not_found")
+                raise RuntimeError(f"gemini_api:{err.get('message', 'unknown')}")
+
+            candidates = data.get("candidates") or []
+            parts = (((candidates[0] if candidates else {}).get("content") or {}).get("parts") or [])
+            content = "".join(str(part.get("text", "")) for part in parts).strip()
+            if not content:
+                raise RuntimeError("parse_failed")
+            self._save_debug_response(content)
+            return self._parse(content)
+        except RuntimeError:
+            raise
+        except requests.exceptions.ConnectionError:
+            raise RuntimeError("gemini_network")
+        except requests.exceptions.Timeout:
+            raise RuntimeError("gemini_timeout")
+        except Exception as e:
+            msg = str(e).lower()
+            if "api key" in msg or "401" in msg or "403" in msg:
+                raise RuntimeError("gemini_auth")
+            if "429" in msg or "rate" in msg or "quota" in msg:
+                raise RuntimeError("gemini_ratelimit")
+            if "model" in msg and "not found" in msg:
+                raise RuntimeError("gemini_model_not_found")
+            if "timeout" in msg:
+                raise RuntimeError("gemini_timeout")
+            if "connect" in msg or "network" in msg:
+                raise RuntimeError("gemini_network")
+            raise RuntimeError(f"gemini_api:{e}")
 
     def _call_openrouter(self, messages):
         import requests
@@ -239,7 +374,9 @@ class HighlightDetector:
                 if "credit" in err_msg or "balance" in err_msg:
                     raise RuntimeError("openrouter_credits")
                 raise RuntimeError(f"openrouter_api:{err.get('message', 'unknown')}")
-            return self._parse(data["choices"][0]["message"]["content"])
+            content = data["choices"][0]["message"]["content"]
+            self._save_debug_response(content)
+            return self._parse(content)
         except RuntimeError:
             raise
         except requests.exceptions.ConnectionError:
@@ -269,6 +406,7 @@ class HighlightDetector:
                 raise RuntimeError("ollama_server")
             response.raise_for_status()
             content = response.json().get("message", {}).get("content", "")
+            self._save_debug_response(content)
             return self._parse(content)
         except RuntimeError:
             raise
@@ -279,17 +417,92 @@ class HighlightDetector:
         except Exception as e:
             raise RuntimeError(f"ollama_api:{e}")
 
-    def _parse(self, raw, retries=3):
-        text = raw if isinstance(raw, str) else json.dumps(raw)
-        for _ in range(retries):
-            cleaned = text.strip()
-            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-            cleaned = re.sub(r"\s*```$", "", cleaned)
-            for candidate in self._parse_candidates(cleaned):
-                clips = self._extract_list(candidate)
-                if clips is not None:
-                    return clips
-        raise RuntimeError("parse_failed")
+    def _parse(self, raw: str, retries: int = 3) -> list:
+        import json, re
+
+        def extract_and_parse(text: str):
+            text = text.strip()
+
+            # Step 1: remove markdown code fences
+            text = re.sub(r"```(?:json)?\s*", "", text)
+            text = re.sub(r"```", "", text)
+            text = text.strip()
+
+            # Step 2: try direct parse (clean response)
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, list):
+                    return parsed
+                if isinstance(parsed, dict):
+                    for val in parsed.values():
+                        if isinstance(val, list) and len(val) > 0:
+                            return val
+            except json.JSONDecodeError:
+                pass
+
+            # Step 3: find JSON array anywhere in the text
+            array_match = re.search(r'\[[\s\S]*\]', text)
+            if array_match:
+                try:
+                    parsed = json.loads(array_match.group())
+                    if isinstance(parsed, list):
+                        return parsed
+                except json.JSONDecodeError:
+                    pass
+
+            # Step 4: find JSON object wrapping an array
+            object_match = re.search(r'\{[\s\S]*\}', text)
+            if object_match:
+                try:
+                    parsed = json.loads(object_match.group())
+                    if isinstance(parsed, dict):
+                        for val in parsed.values():
+                            if isinstance(val, list) and len(val) > 0:
+                                return val
+                except json.JSONDecodeError:
+                    pass
+
+            # Step 5: collect individual objects line by line
+            objects = re.findall(r'\{[^{}]+\}', text, re.DOTALL)
+            if objects:
+                results = []
+                for obj_str in objects:
+                    try:
+                        obj = json.loads(obj_str)
+                        if "start_time" in obj and "end_time" in obj:
+                            results.append(obj)
+                    except json.JSONDecodeError:
+                        continue
+                if results:
+                    return results
+
+            raise ValueError(f"No valid JSON found. Raw response: {text[:300]}")
+
+        last_error = None
+        for attempt in range(retries):
+            try:
+                result = extract_and_parse(raw)
+                validated = []
+                for item in result:
+                    if isinstance(item, dict) and "start_time" in item and "end_time" in item:
+                        item["start_time"]      = float(item["start_time"])
+                        item["end_time"]        = float(item["end_time"])
+                        item.setdefault("reason",         "")
+                        item.setdefault("virality_score", 7.0)
+                        item.setdefault("hook",           "")
+                        validated.append(item)
+                if validated:
+                    return validated
+                raise ValueError("JSON parsed but no valid highlight objects found.")
+            except Exception as e:
+                last_error = e
+                if attempt < retries - 1:
+                    continue
+
+        raise ValueError(
+            f"Failed to parse AI response after {retries} attempts. "
+            f"Last error: {last_error}"
+        )
 
     def _extract_list(self, parsed: Any):
         if isinstance(parsed, list):
@@ -466,6 +679,7 @@ class HighlightDetector:
 
         for prefix, label in (
             ("groq_api:", "Groq"),
+            ("gemini_api:", "Gemini"),
             ("openrouter_api:", "OpenRouter"),
             ("ollama_api:", "Ollama"),
         ):

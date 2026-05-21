@@ -30,9 +30,9 @@ from clipper import render_clip
 from config import (
     ANIMATION_SPEED_OPTIONS, DEFAULT_ANIMATION_SPEED, DEFAULT_CAPTION_EFFECT,
     DEFAULT_CAPTION_STYLE, DEFAULT_DOWNLOAD_QUALITY, DEFAULT_FONT_SIZE,
-    DEFAULT_GROQ_MODEL, DEFAULT_LINES_PER_SUBTITLE, DEFAULT_MAX_DURATION,
-    DEFAULT_MIN_DURATION, DEFAULT_NUM_CLIPS, DEFAULT_OLLAMA_MODEL,
-    DEFAULT_OPENROUTER_MODEL, DEFAULT_POSITION, DEFAULT_PROVIDER,
+    DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL, DEFAULT_LINES_PER_SUBTITLE,
+    DEFAULT_MAX_DURATION, DEFAULT_MIN_DURATION, DEFAULT_NUM_CLIPS,
+    DEFAULT_OLLAMA_MODEL, DEFAULT_OPENROUTER_MODEL, DEFAULT_POSITION, DEFAULT_PROVIDER,
     DEFAULT_REFRAME_MODE, DEFAULT_WORDS_PER_LINE, DEFAULT_ZOOM,
     DOWNLOAD_QUALITY_OPTIONS, FONTS_DIR, OUTPUT_DIR, STYLE_PRESETS,
     TEMP_DIR, WHISPER_MODEL, WHISPER_MODEL_OPTIONS,
@@ -142,6 +142,7 @@ async def get_config():
         "default_reframe": DEFAULT_REFRAME_MODE,
         "default_provider": DEFAULT_PROVIDER,
         "default_groq_model": DEFAULT_GROQ_MODEL,
+        "default_gemini_model": DEFAULT_GEMINI_MODEL,
         "default_openrouter_model": DEFAULT_OPENROUTER_MODEL,
         "default_ollama_model": DEFAULT_OLLAMA_MODEL,
         "default_num_clips": DEFAULT_NUM_CLIPS,
@@ -259,6 +260,7 @@ async def process(request: Request):
     mode                 = g("mode", "captions_only")
     provider             = g("provider", DEFAULT_PROVIDER)
     groq_model           = g("groq_model", DEFAULT_GROQ_MODEL)
+    gemini_model         = g("gemini_model", DEFAULT_GEMINI_MODEL)
     or_model             = g("openrouter_model", DEFAULT_OPENROUTER_MODEL)
     ollama_model         = g("ollama_model", DEFAULT_OLLAMA_MODEL)
     num_clips            = int(g("num_clips", str(DEFAULT_NUM_CLIPS)))
@@ -266,6 +268,12 @@ async def process(request: Request):
     max_dur              = int(g("max_duration", str(DEFAULT_MAX_DURATION)))
     user_guidance        = g("user_guidance", "")
     include_hook         = g("include_hook", "true").lower() == "true"
+
+    num_clips = max(1, min(num_clips, 25))
+    min_dur = max(15, min_dur)
+    max_dur = max(15, max_dur)
+    if max_dur < min_dur:
+        max_dur = min_dur
 
     upload_id = g("upload_id")
     upload_path: Path | None = None
@@ -349,11 +357,13 @@ async def process(request: Request):
 
                 model = (
                     groq_model if provider == "Groq"
+                    else gemini_model if provider == "Gemini"
                     else or_model if provider == "OpenRouter"
                     else ollama_model
                 )
                 api_keys = {
                     "groq":        os.environ.get("GROQ_API_KEY", ""),
+                    "gemini":      os.environ.get("GOOGLE_API_KEY", ""),
                     "openrouter":  os.environ.get("OPENROUTER_API_KEY", ""),
                 }
                 detector = HighlightDetector(provider=provider, model=model, api_keys=api_keys)

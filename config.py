@@ -32,13 +32,15 @@ DEFAULT_ANIMATION_SPEED = "Medium"
 ANIMATION_SPEED_OPTIONS = ["Quick", "Medium", "Slow"]
 
 DEFAULT_FONT_SIZE = 40
-DEFAULT_PROVIDER = "Groq"
+DEFAULT_PROVIDER = "Gemini"
 DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
-DEFAULT_OPENROUTER_MODEL = "google/gemma-2-27b-it:free"
-DEFAULT_OLLAMA_MODEL = "qwen2.5:4b"
+DEFAULT_GEMINI_MODEL = "gemma-4-31b-it" # gemma-4-31b-it | gemini-3.5-flash
+DEFAULT_OPENROUTER_MODEL = "google/gemma-4-26b-a4b-it:free"
+DEFAULT_OLLAMA_MODEL = "qwen3.5:4b"
 DEFAULT_NUM_CLIPS = 5
-DEFAULT_MIN_DURATION = 30
-DEFAULT_MAX_DURATION = 90
+DEFAULT_MIN_DURATION = 15
+DEFAULT_MAX_DURATION = 45
+DEBUG_SAVE_AI_RESPONSE = True  # Set to False to disable saving raw AI responses in temp/
 SUPPORTED_UPLOADS = [".mp4", ".mov", ".mkv", ".webm"]
 DOWNLOAD_QUALITY_OPTIONS = ["2160p", "1440p", "1080p", "720p", "480p", "360p", "Best available"]
 
