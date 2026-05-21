@@ -49,7 +49,8 @@ class HighlightDetector:
         self.api_keys = {
             "groq": api_keys.get("groq") or os.environ.get("GROQ_API_KEY", ""),
             "gemini": api_keys.get("gemini") or os.environ.get("GOOGLE_API_KEY", ""),
-            "openrouter": api_keys.get("openrouter") or os.environ.get("OPENROUTER_API_KEY", ""),
+            "openrouter": api_keys.get("openrouter")
+            or os.environ.get("OPENROUTER_API_KEY", ""),
         }
 
     def _save_debug_response(self, raw_response):
@@ -59,7 +60,9 @@ class HighlightDetector:
             TEMP_DIR.mkdir(parents=True, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             suffix = uuid.uuid4().hex[:8]
-            path = TEMP_DIR / f"ai_response_{self.provider_key}_{timestamp}_{suffix}.txt"
+            path = (
+                TEMP_DIR / f"ai_response_{self.provider_key}_{timestamp}_{suffix}.txt"
+            )
             if isinstance(raw_response, str):
                 content = raw_response
             else:
@@ -109,10 +112,13 @@ class HighlightDetector:
             lines.append(word["word"])
         return " ".join(lines)
 
-    def _build_messages(self, transcript, num_clips, min_dur, max_dur, user_guidance, include_hook):
+    def _build_messages(
+        self, transcript, num_clips, min_dur, max_dur, user_guidance, include_hook
+    ):
         guidance_block = (
             f"Additional clip guidance from the user: {user_guidance.strip()}\n\n"
-            if user_guidance.strip() else ""
+            if user_guidance.strip()
+            else ""
         )
         hook_instruction = (
             "HOOK RULES:\n"
@@ -131,13 +137,14 @@ class HighlightDetector:
             "'This mistake cost me 50k', 'Nobody talks about this tax trick'\n"
             "- Examples of BAD hooks: 'You Won't Believe This', "
             "'This Is Wild', 'Watch Till The End'\n\n"
-            if include_hook else ""
+            if include_hook
+            else ""
         )
         example = (
             '[{"start_time": 12.4, "end_time": 67.8, "reason": "...", '
             '"virality_score": 8.5, "hook": "He quit his job on day one"}]'
-            if include_hook else
-            '[{"start_time": 12.4, "end_time": 67.8, "reason": "...", '
+            if include_hook
+            else '[{"start_time": 12.4, "end_time": 67.8, "reason": "...", '
             '"virality_score": 8.5}]'
         )
         return [
@@ -189,6 +196,17 @@ class HighlightDetector:
                     f"{hook_instruction}"
                     f"{guidance_block}"
                     "REMEMBER: Respond with ONLY the JSON array. "
+                    "TIMESTAMP RULES — CRITICAL:\n"
+                    "- start_time and end_time must be in SECONDS as a decimal number.\n"
+                    "- The transcript uses [MM:SS] markers. Convert them to seconds.\n"
+                    "- Examples of correct conversion:\n"
+                    "  [00:30] = 30.0 seconds\n"
+                    "  [01:00] = 60.0 seconds\n"
+                    "  [02:06] = 126.0 seconds\n"
+                    "  [05:39] = 339.0 seconds\n"
+                    "  [10:00] = 600.0 seconds\n"
+                    "- NEVER write 206 for 2:06. ALWAYS convert: minutes × 60 + seconds.\n"
+                    "- Double-check every timestamp before returning.\n\n"
                     "Start with [ and end with ]. No other text.\n\n"
                     f"Example of EXACT required format:\n{example}\n\n"
                     f"Transcript:\n{transcript}"
@@ -199,6 +217,7 @@ class HighlightDetector:
     def _call_groq(self, messages):
         try:
             from groq import Groq, AuthenticationError, RateLimitError, APIError
+
             if not self.api_keys.get("groq", "").strip():
                 raise RuntimeError("groq_auth")
             client = Groq(api_key=self.api_keys.get("groq", ""))
@@ -277,7 +296,9 @@ class HighlightDetector:
                 detail = response.text.lower()
                 if "api key" in detail or "authentication" in detail:
                     raise RuntimeError("gemini_auth")
-                if "model" in detail and ("not found" in detail or "unsupported" in detail):
+                if "model" in detail and (
+                    "not found" in detail or "unsupported" in detail
+                ):
                     raise RuntimeError("gemini_model_not_found")
             if response.status_code in (401, 403):
                 raise RuntimeError("gemini_auth")
@@ -294,16 +315,27 @@ class HighlightDetector:
                 err = data["error"]
                 status = str(err.get("status", "")).upper()
                 err_msg = str(err.get("message", "")).lower()
-                if status in {"UNAUTHENTICATED", "PERMISSION_DENIED"} or "api key" in err_msg:
+                if (
+                    status in {"UNAUTHENTICATED", "PERMISSION_DENIED"}
+                    or "api key" in err_msg
+                ):
                     raise RuntimeError("gemini_auth")
-                if status == "RESOURCE_EXHAUSTED" or "rate" in err_msg or "quota" in err_msg:
+                if (
+                    status == "RESOURCE_EXHAUSTED"
+                    or "rate" in err_msg
+                    or "quota" in err_msg
+                ):
                     raise RuntimeError("gemini_ratelimit")
-                if status == "NOT_FOUND" or ("model" in err_msg and "not found" in err_msg):
+                if status == "NOT_FOUND" or (
+                    "model" in err_msg and "not found" in err_msg
+                ):
                     raise RuntimeError("gemini_model_not_found")
                 raise RuntimeError(f"gemini_api:{err.get('message', 'unknown')}")
 
             candidates = data.get("candidates") or []
-            parts = (((candidates[0] if candidates else {}).get("content") or {}).get("parts") or [])
+            parts = ((candidates[0] if candidates else {}).get("content") or {}).get(
+                "parts"
+            ) or []
             content = "".join(str(part.get("text", "")) for part in parts).strip()
             if not content:
                 raise RuntimeError("parse_failed")
@@ -331,6 +363,7 @@ class HighlightDetector:
 
     def _call_openrouter(self, messages):
         import requests
+
         try:
             if not self.api_keys.get("openrouter", "").strip():
                 raise RuntimeError("openrouter_auth")
@@ -388,6 +421,7 @@ class HighlightDetector:
 
     def _call_ollama(self, messages):
         import requests
+
         ollama_url = "http://localhost:11434/api/chat"
         try:
             response = requests.post(
@@ -441,7 +475,7 @@ class HighlightDetector:
                 pass
 
             # Step 3: find JSON array anywhere in the text
-            array_match = re.search(r'\[[\s\S]*\]', text)
+            array_match = re.search(r"\[[\s\S]*\]", text)
             if array_match:
                 try:
                     parsed = json.loads(array_match.group())
@@ -451,7 +485,7 @@ class HighlightDetector:
                     pass
 
             # Step 4: find JSON object wrapping an array
-            object_match = re.search(r'\{[\s\S]*\}', text)
+            object_match = re.search(r"\{[\s\S]*\}", text)
             if object_match:
                 try:
                     parsed = json.loads(object_match.group())
@@ -463,7 +497,7 @@ class HighlightDetector:
                     pass
 
             # Step 5: collect individual objects line by line
-            objects = re.findall(r'\{[^{}]+\}', text, re.DOTALL)
+            objects = re.findall(r"\{[^{}]+\}", text, re.DOTALL)
             if objects:
                 results = []
                 for obj_str in objects:
@@ -484,12 +518,16 @@ class HighlightDetector:
                 result = extract_and_parse(raw)
                 validated = []
                 for item in result:
-                    if isinstance(item, dict) and "start_time" in item and "end_time" in item:
-                        item["start_time"]      = float(item["start_time"])
-                        item["end_time"]        = float(item["end_time"])
-                        item.setdefault("reason",         "")
+                    if (
+                        isinstance(item, dict)
+                        and "start_time" in item
+                        and "end_time" in item
+                    ):
+                        item["start_time"] = float(item["start_time"])
+                        item["end_time"] = float(item["end_time"])
+                        item.setdefault("reason", "")
                         item.setdefault("virality_score", 7.0)
-                        item.setdefault("hook",           "")
+                        item.setdefault("hook", "")
                         validated.append(item)
                 if validated:
                     return validated
@@ -565,16 +603,31 @@ class HighlightDetector:
                 continue
             start_time = self._pick_float(
                 clip,
-                "start_time", "start", "startTime", "start_seconds", "from", "begin",
+                "start_time",
+                "start",
+                "startTime",
+                "start_seconds",
+                "from",
+                "begin",
             )
             end_time = self._pick_float(
                 clip,
-                "end_time", "end", "endTime", "end_seconds", "to", "finish",
+                "end_time",
+                "end",
+                "endTime",
+                "end_seconds",
+                "to",
+                "finish",
             )
             if start_time is None or end_time is None:
                 range_start, range_end = self._pick_range(
                     clip,
-                    "timestamp", "timestamps", "time_range", "range", "clip_range", "segment",
+                    "timestamp",
+                    "timestamps",
+                    "time_range",
+                    "range",
+                    "clip_range",
+                    "segment",
                 )
                 if start_time is None:
                     start_time = range_start
@@ -586,8 +639,15 @@ class HighlightDetector:
                 {
                     "start_time": start_time,
                     "end_time": end_time,
-                    "reason": str(clip.get("reason") or clip.get("why") or clip.get("description") or "").strip(),
-                    "virality_score": clip.get("virality_score", clip.get("score", "N/A")),
+                    "reason": str(
+                        clip.get("reason")
+                        or clip.get("why")
+                        or clip.get("description")
+                        or ""
+                    ).strip(),
+                    "virality_score": clip.get(
+                        "virality_score", clip.get("score", "N/A")
+                    ),
                     "hook": str(clip.get("hook") or "").strip(),
                 }
             )
@@ -684,7 +744,7 @@ class HighlightDetector:
             ("ollama_api:", "Ollama"),
         ):
             if code.startswith(prefix):
-                detail = code[len(prefix):].strip() or "Unknown provider error."
+                detail = code[len(prefix) :].strip() or "Unknown provider error."
                 return f"❌ {label} error: {detail}"
 
         return "❌ AI highlight detection failed. Try again or switch provider."

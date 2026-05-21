@@ -30,10 +30,11 @@ from clipper import render_clip
 from config import (
     ANIMATION_SPEED_OPTIONS, DEFAULT_ANIMATION_SPEED, DEFAULT_CAPTION_EFFECT,
     DEFAULT_CAPTION_STYLE, DEFAULT_DOWNLOAD_QUALITY, DEFAULT_FONT_SIZE,
+    DEFAULT_FADE_IN_WORDS,
     DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL, DEFAULT_LINES_PER_SUBTITLE,
     DEFAULT_MAX_DURATION, DEFAULT_MIN_DURATION, DEFAULT_NUM_CLIPS,
     DEFAULT_OLLAMA_MODEL, DEFAULT_OPENROUTER_MODEL, DEFAULT_POSITION, DEFAULT_PROVIDER,
-    DEFAULT_REFRAME_MODE, DEFAULT_WORDS_PER_LINE, DEFAULT_ZOOM,
+    DEFAULT_REFRAME_MODE, DEFAULT_WORD_BY_WORD, DEFAULT_WORDS_PER_LINE, DEFAULT_ZOOM,
     DOWNLOAD_QUALITY_OPTIONS, FONTS_DIR, OUTPUT_DIR, STYLE_PRESETS,
     TEMP_DIR, WHISPER_MODEL, WHISPER_MODEL_OPTIONS,
 )
@@ -138,6 +139,8 @@ async def get_config():
         "default_font_size": DEFAULT_FONT_SIZE,
         "default_effect": DEFAULT_CAPTION_EFFECT,
         "default_animation_speed": DEFAULT_ANIMATION_SPEED,
+        "default_word_by_word": DEFAULT_WORD_BY_WORD,
+        "default_fade_in_words": DEFAULT_FADE_IN_WORDS,
         "animation_speed_options": ANIMATION_SPEED_OPTIONS,
         "default_reframe": DEFAULT_REFRAME_MODE,
         "default_provider": DEFAULT_PROVIDER,
@@ -188,6 +191,8 @@ async def preview(request: Request):
         rm = normalize_reframe_mode(g("reframe_mode", DEFAULT_REFRAME_MODE))
         animation_speed_name = g("animation_speed", DEFAULT_ANIMATION_SPEED)
         animation_speed = ANIMATION_SPEEDS.get(animation_speed_name, 1.0)
+        word_by_word = g("word_by_word", "false").lower() == "true"
+        fade_in_words = g("fade_in_words", "false").lower() == "true"
         base_image = None
 
         upload_id = g("upload_id")
@@ -220,6 +225,8 @@ async def preview(request: Request):
             shadow_color=g("shadow_color", "#000000"),
             shadow_offset=int(g("shadow_offset", "4")),
             caption_position_pct=float(g("caption_position_pct", "78")),
+            word_by_word=word_by_word,
+            fade_in_words=fade_in_words,
         )
         return JSONResponse({"ok": True, "image": pil_to_b64(result)})
     except Exception as e:
@@ -257,6 +264,8 @@ async def process(request: Request):
     caption_effect       = g("caption_effect", DEFAULT_CAPTION_EFFECT)
     animation_speed_name = g("animation_speed", DEFAULT_ANIMATION_SPEED)
     animation_speed      = ANIMATION_SPEEDS.get(animation_speed_name, 1.0)
+    word_by_word         = g("word_by_word", "false").lower() == "true"
+    fade_in_words        = g("fade_in_words", "false").lower() == "true"
     mode                 = g("mode", "captions_only")
     provider             = g("provider", DEFAULT_PROVIDER)
     groq_model           = g("groq_model", DEFAULT_GROQ_MODEL)
@@ -395,6 +404,7 @@ async def process(request: Request):
                 "background_opacity": background_opacity, "position": "Bottom",
                 "words_per_line": words_per_line, "lines_per_subtitle": lines_per_subtitle,
                 "effect": caption_effect, "animation_speed": animation_speed,
+                "word_by_word": word_by_word, "fade_in_words": fade_in_words,
                 "outline_enabled": outline_enabled,
                 "outline_color": outline_color, "outline_width": outline_width,
                 "drop_shadow_enabled": drop_shadow_enabled, "shadow_color": shadow_color,

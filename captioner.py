@@ -209,6 +209,8 @@ def _draw_caption_chunk(
     shadow_offset: int = 4,
     caption_position_pct: float | None = None,
     animation_speed: float = 1.0,
+    word_by_word: bool = False,
+    fade_in_words: bool = False,
 ):
     preset = STYLE_PRESETS[style_name]
     stroke_width = outline_width if outline_enabled else 0
@@ -251,7 +253,7 @@ def _draw_caption_chunk(
 
             # FIX: for Typewriter, measure the partial word not the full word
             measure_word = display_word
-            if is_active and effect == "Typewriter":
+            if is_active and effect == "Typewriter" and not word_by_word:
                 t = get_adjusted_progress(word, timestamp, animation_speed)
                 eased = ease_out_cubic(t)
                 chars = max(int(len(display_word) * eased), 1)
@@ -316,6 +318,26 @@ def _draw_caption_chunk(
             y_offset = 0
             draw_word = display_word
             word_color = active_color if is_active else inactive_color  # FIX: default here
+
+            # Determine visibility and opacity for word-by-word mode.
+            if word_by_word:
+                word_has_started = timestamp >= word["start"]
+
+                if not word_has_started:
+                    text_width, _, _, _ = _measure(
+                        dummy_draw, display_word, word_font, stroke_width=stroke_width
+                    )
+                    cursor_x += text_width + int(scaled_font_size * 0.35)
+                    absolute_word_idx += 1
+                    continue
+
+                if fade_in_words:
+                    FADE_DURATION = 0.10
+                    time_since_start = timestamp - word["start"]
+                    fade_t = min(time_since_start / FADE_DURATION, 1.0)
+                    alpha = int(255 * ease_out_cubic(fade_t))
+                else:
+                    alpha = 255
 
             if is_active:
                 t = get_adjusted_progress(word, timestamp, animation_speed)
@@ -422,6 +444,8 @@ def render_caption_preview(
     shadow_offset: int = 4,
     caption_position_pct: float | None = None,
     animation_speed: float = 1.0,
+    word_by_word: bool = False,
+    fade_in_words: bool = False,
 ):
     preview = image.convert("RGBA")
     video_info = {"width": preview.width, "height": preview.height}
@@ -438,12 +462,24 @@ def render_caption_preview(
         sample_words.append({"word": token, "start": cursor, "end": cursor + duration})
         cursor += duration
     chunks = group_words(sample_words, words_per_line, lines_per_subtitle)
-    chunk = chunks[0] if chunks else sample_words
-    active_index = min(1, max(len(chunk) - 1, 0))
+    chunk = chunks[0] if chunks else {"words": sample_words, "chunk_start": 0.0, "chunk_end": cursor}
+    chunk_words = chunk["words"] if isinstance(chunk, dict) else chunk
+    preview_timestamp = (
+        (chunk["chunk_start"] + chunk["chunk_end"]) / 2.0
+        if isinstance(chunk, dict)
+        else (chunk_words[len(chunk_words) // 2]["start"] if chunk_words else 0.0)
+    )
+    active_index = None
+    for idx, word in enumerate(chunk_words):
+        if word["start"] <= preview_timestamp <= word["end"]:
+            active_index = idx
+            break
+    if active_index is None and chunk_words:
+        active_index = min(len(chunk_words) // 2, max(len(chunk_words) - 1, 0))
     _draw_caption_chunk(
         draw=draw,
         dummy_draw=dummy_draw,
-        chunk_words=chunk if isinstance(chunk, list) else chunk["words"],
+        chunk_words=chunk_words,
         active_index=active_index,
         style_name=style_name,
         base_font=base_font,
@@ -457,7 +493,7 @@ def render_caption_preview(
         words_per_line=words_per_line,
         video_info=video_info,
         effect=effect,
-        timestamp=sample_words[active_index]["start"] + 0.15 if sample_words else 0.0,
+        timestamp=preview_timestamp,
         outline_enabled=outline_enabled,
         outline_color=outline_color,
         outline_width=outline_width,
@@ -466,6 +502,8 @@ def render_caption_preview(
         shadow_offset=shadow_offset,
         caption_position_pct=caption_position_pct,
         animation_speed=animation_speed,
+        word_by_word=word_by_word,
+        fade_in_words=fade_in_words,
     )
     return preview.convert("RGB")
 
@@ -494,6 +532,8 @@ def render_caption_frames(
     temp_root: Path | None = None,
     caption_position_pct: float | None = None,
     animation_speed: float = 1.0,
+    word_by_word: bool = False,
+    fade_in_words: bool = False,
 ):
     preset = STYLE_PRESETS[style_name]
     frames_dir = (temp_root or TEMP_DIR) / f"caption_frames_{clip_path.stem}"
@@ -544,6 +584,8 @@ def render_caption_frames(
                 shadow_offset=shadow_offset,
                 caption_position_pct=caption_position_pct,
                 animation_speed=animation_speed,
+                word_by_word=word_by_word,
+                fade_in_words=fade_in_words,
             )
 
         image.save(frames_dir / f"{frame_index:06d}.png")

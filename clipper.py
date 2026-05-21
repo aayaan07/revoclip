@@ -147,6 +147,8 @@ def render_clip(
         shadow_offset=caption_settings.get("shadow_offset", 4),
         caption_position_pct=caption_settings.get("caption_position_pct"),
         animation_speed=caption_settings.get("animation_speed", 1.0),
+        word_by_word=caption_settings.get("word_by_word", False),
+        fade_in_words=caption_settings.get("fade_in_words", False),
     )
     burn_caption_overlay(reframed_path, overlay_path, final_path)
     shutil.rmtree(frames_dir, ignore_errors=True)

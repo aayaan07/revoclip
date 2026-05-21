@@ -1535,6 +1535,36 @@ body.dark-mode {
               </div>
               <div class="hint">How fast caption effects animate per word</div>
             </div>
+
+            <div class="field">
+              <div class="toggle-row">
+                <label for="word-by-word">
+                  Word by Word mode
+                  <span class="hint" style="display:inline;margin-left:6px">
+                    Words appear as spoken - trending style
+                  </span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" id="word-by-word">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field" id="fade-in-field" style="display:none">
+              <div class="toggle-row">
+                <label for="fade-in-words">
+                  Fade in new words
+                  <span class="hint" style="display:inline;margin-left:6px">
+                    Smooth ~100ms ease in when each word appears
+                  </span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" id="fade-in-words">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
           </div>
 
           <div class="left-pad"></div>
@@ -1682,6 +1712,12 @@ body.dark-mode {
         );
         setPills("provider-pills", cfg.default_provider);
         setPills("speed-pills", cfg.default_animation_speed);
+        document.getElementById("word-by-word").checked =
+          cfg.default_word_by_word || false;
+        document.getElementById("fade-in-words").checked =
+          cfg.default_fade_in_words || false;
+        document.getElementById("fade-in-field").style.display =
+          document.getElementById("word-by-word").checked ? "block" : "none";
         updateProviderFields(cfg.default_provider);
         setMode("ai_clip");
         bindEvents();
@@ -1950,6 +1986,14 @@ body.dark-mode {
         add("font_size", document.getElementById("font-size").value);
         add("caption_effect", document.getElementById("caption-effect").value);
         add("animation_speed", pillVal("speed-pills"));
+        add(
+          "word_by_word",
+          document.getElementById("word-by-word").checked ? "true" : "false"
+        );
+        add(
+          "fade_in_words",
+          document.getElementById("fade-in-words").checked ? "true" : "false"
+        );
 
         if (uploadedFileId) add("upload_id", uploadedFileId);
         return fd;
@@ -2256,6 +2300,16 @@ body.dark-mode {
             .getElementById(id)
             .addEventListener("change", schedulePreview);
         });
+        document
+          .getElementById("word-by-word")
+          .addEventListener("change", function () {
+            document.getElementById("fade-in-field").style.display =
+              this.checked ? "block" : "none";
+            schedulePreview();
+          });
+        document
+          .getElementById("fade-in-words")
+          .addEventListener("change", schedulePreview);
         [
           "font-select",
           "caption-effect",
