@@ -29,6 +29,7 @@ from captioner import ANIMATION_SPEEDS, render_caption_preview, resolve_font
 from clipper import render_clip
 from config import (
     ANIMATION_SPEED_OPTIONS, DEFAULT_ANIMATION_SPEED, DEFAULT_CAPTION_EFFECT,
+    BACKGROUND_TYPE_OPTIONS, DEFAULT_BACKGROUND_COLOR, DEFAULT_BACKGROUND_TYPE,
     DEFAULT_CAPTION_CASE, DEFAULT_CAPTION_STYLE, DEFAULT_DOWNLOAD_QUALITY, DEFAULT_FONT_SIZE,
     DEFAULT_FADE_IN_WORDS,
     DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL, DEFAULT_LINES_PER_SUBTITLE,
@@ -40,12 +41,19 @@ from config import (
     DEFAULT_OLLAMA_MODEL, DEFAULT_OPENROUTER_MODEL, DEFAULT_POSITION, DEFAULT_PROVIDER,
     DEFAULT_REFRAME_MODE, DEFAULT_WORD_BY_WORD, DEFAULT_WORDS_PER_LINE, DEFAULT_ZOOM,
     DOWNLOAD_QUALITY_OPTIONS, FONTS_DIR, OUTPUT_DIR, STYLE_PRESETS,
+    REFRAME_MODE_OPTIONS,
     TEMP_DIR, WHISPER_MODEL, WHISPER_MODEL_OPTIONS,
 )
 from downloader import prepare_input_video
 from errors import friendly_error
 from highlight import HighlightDetector, ERROR_MESSAGES
-from reframer import extract_preview, normalize_aspect_ratio, normalize_reframe_mode, reframe_image
+from reframer import (
+    extract_preview,
+    is_inset_mode,
+    normalize_aspect_ratio,
+    normalize_reframe_mode,
+    reframe_image,
+)
 from transcriber import transcribe_video
 from PIL import Image
 
@@ -63,7 +71,7 @@ FONTS_DIR.mkdir(parents=True, exist_ok=True)
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
-PREVIEW_FALLBACK_PATH = Path(__file__).resolve().with_name("preview-temp.png")
+PREVIEW_FALLBACK_PATH = ASSETS_DIR / "preview-img.png"
 
 app = FastAPI(title="Revoclip")
 app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
@@ -168,6 +176,10 @@ async def get_config():
         "default_fade_in_words": DEFAULT_FADE_IN_WORDS,
         "animation_speed_options": ANIMATION_SPEED_OPTIONS,
         "default_reframe": DEFAULT_REFRAME_MODE,
+        "reframe_modes": REFRAME_MODE_OPTIONS,
+        "background_type_options": BACKGROUND_TYPE_OPTIONS,
+        "default_background_type": DEFAULT_BACKGROUND_TYPE,
+        "default_background_color": DEFAULT_BACKGROUND_COLOR,
         "default_provider": DEFAULT_PROVIDER,
         "default_groq_model": DEFAULT_GROQ_MODEL,
         "default_gemini_model": DEFAULT_GEMINI_MODEL,
@@ -214,6 +226,8 @@ async def preview(request: Request):
         ar = normalize_aspect_ratio(g("aspect_ratio", "9:16 (Vertical)"))
         zm = float(g("zoom", "1.0"))
         rm = normalize_reframe_mode(g("reframe_mode", DEFAULT_REFRAME_MODE))
+        background_type = g("background_type", DEFAULT_BACKGROUND_TYPE)
+        background_color = g("background_color_bg", DEFAULT_BACKGROUND_COLOR)
         animation_speed_name = g("animation_speed", DEFAULT_ANIMATION_SPEED)
         animation_speed = ANIMATION_SPEEDS.get(animation_speed_name, 1.0)
         caption_case = g("caption_case", DEFAULT_CAPTION_CASE)
@@ -236,9 +250,23 @@ async def preview(request: Request):
 
         upload_id = g("upload_id")
         if upload_id and (TEMP_DIR / upload_id).exists():
-            base_image = extract_preview(TEMP_DIR / upload_id, ar, zm, rm)
+            base_image = extract_preview(
+                TEMP_DIR / upload_id,
+                ar,
+                zm,
+                rm,
+                background_type,
+                background_color,
+            )
         elif g("youtube_url").strip() and PREVIEW_FALLBACK_PATH.exists():
-            base_image = reframe_image(Image.open(PREVIEW_FALLBACK_PATH), ar, zm, rm)
+            base_image = reframe_image(
+                Image.open(PREVIEW_FALLBACK_PATH),
+                ar,
+                zm,
+                rm,
+                background_type,
+                background_color,
+            )
 
         if base_image is None:
             return JSONResponse({"ok": False, "image": None})
@@ -298,6 +326,8 @@ async def process(request: Request):
     aspect_ratio         = g("aspect_ratio", "9:16 (Vertical)")
     zoom                 = float(g("zoom", str(DEFAULT_ZOOM)))
     reframe_mode         = g("reframe_mode", DEFAULT_REFRAME_MODE)
+    background_type      = g("background_type", DEFAULT_BACKGROUND_TYPE)
+    background_color_bg  = g("background_color_bg", DEFAULT_BACKGROUND_COLOR)
     caption_style        = g("caption_style", DEFAULT_CAPTION_STYLE)
     active_color         = g("active_color", "#FFD700")
     inactive_color       = g("inactive_color", "#FFFFFF")
@@ -503,6 +533,8 @@ async def process(request: Request):
                 yield sse("progress", {"value": base_pct})
                 yield sse("status", {"msg": f"✂️ Cutting clip {idx} of {n}..."})
                 yield sse("progress", {"value": min(base_pct + 7, 95)})
+                if is_inset_mode(reframe_mode):
+                    yield sse("status", {"msg": "🎨 Applying inset style (this takes a moment)..."})
                 yield sse("status", {"msg": f"🎨 Rendering captions for clip {idx} of {n}..."})
 
                 try:
@@ -516,6 +548,8 @@ async def process(request: Request):
                             aspect_ratio=ar_value,
                             zoom=zoom,
                             reframe_mode=normalize_reframe_mode(reframe_mode),
+                            background_type=background_type,
+                            background_color=background_color_bg,
                             caption_settings=clip_settings,
                             clip_prefix=clip_prefix,
                         ),

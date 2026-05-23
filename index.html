@@ -188,13 +188,13 @@ body.dark-mode {
         height: 30px;
         padding: 0 12px;
         border-radius: 999px;
-        border: 1px solid var(--border2);
-        background: var(--card);
+        /* border: 1px solid var(--border2); */
+        /* background: var(--card); */
         color: var(--text2);
         font-family: inherit;
         font-size: 12px;
         font-weight: 600;
-        text-decoration: none;
+        text-decoration: underline;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -912,10 +912,9 @@ body.dark-mode {
         color: var(--accent);
         cursor: pointer;
         transition: all 0.15s;
-        margin-top: 4px;
+        margin-top: 16px;
         width: 100%;
         justify-content: center;
-        margin: 0 10px;
       }
 
       #zip-btn:hover {
@@ -1235,14 +1234,37 @@ body.dark-mode {
             <div class="field">
               <label>Reframe mode</label>
               <div class="pills" id="reframe-pills">
-                <div class="pill active" data-val="Contain/Fit">
-                  Contain / Fit
-                </div>
-                <div class="pill" data-val="Cover">Cover</div>
+                <div class="pill" data-val="Contain/Fit">Contain</div>
+                <div class="pill active" data-val="Cover">Cover</div>
+                <div class="pill" data-val="Inset 16:9">Inset 16:9</div>
+                <div class="pill" data-val="Inset Tall">Inset Tall</div>
+                <div class="pill" data-val="Inset 1:1">Inset 1:1</div>
               </div>
             </div>
 
-            <div class="field">
+            <div class="field" id="background-settings">
+              <label>Background</label>
+              <div class="pills" id="bg-type-pills">
+                <div class="pill active" data-val="Blur">Blur</div>
+                <div class="pill" data-val="Solid Color">Solid Color</div>
+              </div>
+            </div>
+
+            <div class="field" id="bg-solid-field" style="display: none">
+              <label>Background color</label>
+              <div class="color-wrap">
+                <input type="color" id="bg-solid-color" value="#000000" />
+                <input
+                  class="hex-input"
+                  id="bg-solid-hex"
+                  type="text"
+                  value="#000000"
+                  maxlength="7"
+                />
+              </div>
+            </div>
+
+            <div class="field" id="zoom-field">
               <label>Zoom</label>
               <div class="slider-wrap">
                 <input
@@ -1921,6 +1943,8 @@ body.dark-mode {
         );
         setPills("provider-pills", cfg.default_provider);
         setPills("speed-pills", cfg.default_animation_speed);
+        setPills("reframe-pills", cfg.default_reframe || "Contain/Fit");
+        setPills("bg-type-pills", cfg.default_background_type || "Blur");
         document.getElementById("word-by-word").checked =
           cfg.default_word_by_word || false;
         document.getElementById("fade-in-words").checked =
@@ -1967,6 +1991,12 @@ body.dark-mode {
           cfg.default_hook_position_pct || 8;
         document.getElementById("hook-position-pct-val").textContent =
           (cfg.default_hook_position_pct || 8) + "%";
+        document.getElementById("bg-solid-color").value =
+          cfg.default_background_color || "#000000";
+        document.getElementById("bg-solid-hex").value =
+          cfg.default_background_color || "#000000";
+        updateZoomVisibility();
+        updateBackgroundTypeVisibility();
         updateProviderFields(cfg.default_provider);
         setMode("ai_clip");
         bindEvents();
@@ -2042,6 +2072,17 @@ body.dark-mode {
           v === "OpenRouter" ? "block" : "none";
         document.getElementById("ollama-model-field").style.display =
           v === "Ollama" ? "block" : "none";
+      }
+
+      function updateZoomVisibility(mode = pillVal("reframe-pills")) {
+        document.getElementById("zoom-field").style.display = "block";
+      }
+
+      function updateBackgroundTypeVisibility(
+        mode = pillVal("bg-type-pills")
+      ) {
+        document.getElementById("bg-solid-field").style.display =
+          mode === "Solid Color" ? "block" : "none";
       }
 
       function populateSelects() {
@@ -2213,6 +2254,11 @@ body.dark-mode {
         add("aspect_ratio", pillVal("aspect-pills"));
         add("zoom", document.getElementById("zoom").value);
         add("reframe_mode", pillVal("reframe-pills"));
+        add("background_type", pillVal("bg-type-pills"));
+        add(
+          "background_color_bg",
+          document.getElementById("bg-solid-color").value
+        );
         add("caption_style", pillVal("style-pills"));
         add("active_color", document.getElementById("active-color").value);
         add("inactive_color", document.getElementById("inactive-color").value);
@@ -2558,6 +2604,12 @@ body.dark-mode {
                   (v) => v + "%"
                 );
               }
+              if (group.id === "reframe-pills") {
+                updateZoomVisibility(pill.dataset.val);
+              }
+              if (group.id === "bg-type-pills") {
+                updateBackgroundTypeVisibility(pill.dataset.val);
+              }
               schedulePreview();
             });
           });
@@ -2601,6 +2653,7 @@ body.dark-mode {
         syncColor("active-color", "active-hex");
         syncColor("inactive-color", "inactive-hex");
         syncColor("bg-color", "bg-hex");
+        syncColor("bg-solid-color", "bg-solid-hex");
         syncColor("outline-color", "outline-hex");
         syncColor("shadow-color", "shadow-hex");
         syncColor("hook-color", "hook-color-hex");

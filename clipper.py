@@ -6,7 +6,13 @@ from PIL import Image
 
 from captioner import render_caption_frames, render_hook
 from config import FFMPEG_PATH, OUTPUT_DIR, TEMP_DIR
-from reframer import build_reframe_filter, get_video_info
+from reframer import (
+    build_reframe_filter,
+    composite_inset_frame,
+    compute_target_dimensions,
+    get_video_info,
+    is_inset_mode,
+)
 
 
 def _run(command):
@@ -54,9 +60,109 @@ def cut_segment(source_video: Path, start: float, end: float, destination: Path)
     return destination
 
 
-def reframe_video(source_video: Path, destination: Path, aspect_ratio: str, zoom: float, reframe_mode: str):
+def _render_inset_video(
+    source_video: Path,
+    destination: Path,
+    reframe_mode: str,
+    zoom: float,
+    background_type: str,
+    background_color: str,
+):
     info = get_video_info(source_video)
-    vf, dims = build_reframe_filter(info["width"], info["height"], aspect_ratio, zoom, reframe_mode)
+    target_width, target_height = compute_target_dimensions(
+        info["width"], info["height"], "9:16", reframe_mode
+    )
+    frames_dir = TEMP_DIR / f"{destination.stem}_inset_frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        _run(
+            [
+                FFMPEG_PATH,
+                "-y",
+                "-i",
+                str(source_video),
+                str(frames_dir / "%06d.png"),
+            ]
+        )
+
+        for frame_path in sorted(frames_dir.glob("*.png")):
+            with Image.open(frame_path) as frame:
+                composited = composite_inset_frame(
+                    frame.convert("RGB"),
+                    reframe_mode,
+                    zoom,
+                    background_type,
+                    background_color,
+                    target_size=(target_width, target_height),
+                )
+                composited.save(frame_path)
+
+        _run(
+            [
+                FFMPEG_PATH,
+                "-y",
+                "-framerate",
+                f"{info['fps']}",
+                "-i",
+                str(frames_dir / "%06d.png"),
+                "-i",
+                str(source_video),
+                "-map",
+                "0:v",
+                "-map",
+                "1:a?",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-shortest",
+                "-movflags",
+                "+faststart",
+                str(destination),
+            ]
+        )
+    finally:
+        shutil.rmtree(frames_dir, ignore_errors=True)
+
+    return destination, {
+        "width": target_width,
+        "height": target_height,
+        "duration": info["duration"],
+        "fps": info["fps"],
+    }
+
+
+def reframe_video(
+    source_video: Path,
+    destination: Path,
+    aspect_ratio: str,
+    zoom: float,
+    reframe_mode: str,
+    background_type: str,
+    background_color: str,
+):
+    if is_inset_mode(reframe_mode):
+        return _render_inset_video(
+            source_video,
+            destination,
+            reframe_mode,
+            zoom,
+            background_type,
+            background_color,
+        )
+
+    info = get_video_info(source_video)
+    vf, dims = build_reframe_filter(
+        info["width"],
+        info["height"],
+        aspect_ratio,
+        zoom,
+        reframe_mode,
+        background_type,
+        background_color,
+    )
     _run(
         [
             FFMPEG_PATH,
@@ -196,6 +302,8 @@ def render_clip(
     aspect_ratio: str,
     zoom: float,
     reframe_mode: str,
+    background_type: str,
+    background_color: str,
     caption_settings: dict,
     clip_prefix: str = "",
 ):
@@ -207,7 +315,15 @@ def render_clip(
     final_path = OUTPUT_DIR / f"{clip_prefix}clip_{clip_index}.mp4"
 
     cut_segment(source_video, float(segment["start_time"]), float(segment["end_time"]), cut_path)
-    reframed_path, video_info = reframe_video(cut_path, reframed_path, aspect_ratio, zoom, reframe_mode)
+    reframed_path, video_info = reframe_video(
+        cut_path,
+        reframed_path,
+        aspect_ratio,
+        zoom,
+        reframe_mode,
+        background_type,
+        background_color,
+    )
     words = clip_words(transcript_words, float(segment["start_time"]), float(segment["end_time"]))
     overlay_path, frames_dir = render_caption_frames(
         clip_path=reframed_path,
