@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
-from config import FFMPEG_PATH, FONTS_DIR, STYLE_PRESETS, TEMP_DIR
+from config import FFMPEG_PATH, FONTS_DIR, HOOK_LINE_CHAR_LIMIT, STYLE_PRESETS, TEMP_DIR
 
 import math
 
@@ -48,6 +48,43 @@ def get_adjusted_progress(word, timestamp, speed):
 
 MAX_CHARS_PER_LINE = 18
 PREVIEW_SAMPLE_TEXT = "This Build is Absolutely Insane!"
+
+
+def _apply_text_case(text: str, case_mode: str) -> str:
+    mode = (case_mode or "upper").lower()
+    if mode == "lower":
+        return text.lower()
+    if mode == "title":
+        return text.title()
+    return text.upper()
+
+
+def _split_hook_lines(text: str, char_limit: int) -> list[str]:
+    """
+    Split hook text into lines so no line exceeds char_limit characters.
+    Splits on word boundaries only - never mid-word.
+    """
+    words = text.split()
+    lines = []
+    current_line = []
+    current_len = 0
+
+    for word in words:
+        added_len = len(word) + (1 if current_line else 0)
+        if current_line and current_len + added_len > char_limit:
+            lines.append(" ".join(current_line))
+            current_line = [word]
+            current_len = len(word)
+        else:
+            current_line.append(word)
+            current_len += added_len
+
+    if current_line:
+        lines.append(" ".join(current_line))
+
+    return lines if lines else [text]
+
+
 def _split_lines(words, words_per_line, max_chars_per_line=None):
     CHAR_SPLIT_THRESHOLD = 20
 
@@ -182,6 +219,98 @@ def _find_active(chunks, timestamp):
     return None, None
 
 
+def render_hook(
+    frame: Image.Image,
+    hook_text: str,
+    font_name: str | None,
+    font_size: int,
+    text_color: str,
+    outline_enabled: bool,
+    outline_color: str,
+    outline_width: int,
+    drop_shadow_enabled: bool,
+    shadow_color: str,
+    shadow_offset: int,
+    position_pct: float = 8.0,
+    case_mode: str = "upper",
+) -> Image.Image:
+    """
+    Renders hook text onto the frame at the top area.
+    Returns the modified frame.
+    Hook text is auto-split into multiple lines if any line
+    exceeds HOOK_LINE_CHAR_LIMIT characters.
+    """
+    if not hook_text or not hook_text.strip():
+        return frame
+
+    _, resolved_path = resolve_font(font_name, "CapCut", font_size)
+    if resolved_path:
+        font = ImageFont.truetype(resolved_path, font_size)
+    else:
+        font = ImageFont.load_default()
+
+    display_text = _apply_text_case(hook_text, case_mode)
+    lines = _split_hook_lines(display_text, HOOK_LINE_CHAR_LIMIT)
+
+    video_width = frame.width
+    video_height = frame.height
+    scale = video_height / 1080
+    scaled_size = max(int(font_size * scale), 12)
+    if resolved_path:
+        font = ImageFont.truetype(resolved_path, scaled_size)
+
+    dummy_img = Image.new("RGBA", (1, 1))
+    dummy_draw = ImageDraw.Draw(dummy_img)
+    stroke_width = outline_width if outline_enabled else 0
+
+    line_heights = []
+    line_widths = []
+    for line in lines:
+        bbox = dummy_draw.textbbox((0, 0), line, font=font, stroke_width=stroke_width)
+        line_widths.append(bbox[2] - bbox[0])
+        line_heights.append(bbox[3] - bbox[1])
+
+    line_gap = max(int(scaled_size * 0.2), 4)
+    start_y = int(video_height * (position_pct / 100.0))
+
+    out = frame.convert("RGBA")
+    out_draw = ImageDraw.Draw(out)
+    cursor_y = start_y
+
+    for i, line in enumerate(lines):
+        _, _, _, y_bearing = _measure(
+            dummy_draw, "Agpqyj|", font, stroke_width=stroke_width
+        )
+        center_x = video_width // 2
+        line_w = line_widths[i]
+        draw_x = center_x - line_w // 2
+        draw_y = cursor_y - y_bearing
+
+        stroke_fill = outline_color if outline_enabled and outline_color else None
+        text_fill = _hex_to_rgba(text_color, 255)
+
+        if drop_shadow_enabled:
+            shadow_fill = _hex_to_rgba(shadow_color, int(255 * 0.8))
+            out_draw.text(
+                (draw_x + shadow_offset, draw_y + shadow_offset),
+                line,
+                font=font,
+                fill=shadow_fill,
+            )
+
+        out_draw.text(
+            (draw_x, draw_y),
+            line,
+            font=font,
+            fill=text_fill,
+            stroke_width=stroke_width if stroke_fill else 0,
+            stroke_fill=stroke_fill,
+        )
+        cursor_y += line_heights[i] + line_gap
+
+    return out.convert("RGB")
+
+
 
 def _draw_caption_chunk(
     draw,
@@ -211,6 +340,7 @@ def _draw_caption_chunk(
     animation_speed: float = 1.0,
     word_by_word: bool = False,
     fade_in_words: bool = False,
+    caption_case: str = "upper",
 ):
     preset = STYLE_PRESETS[style_name]
     stroke_width = outline_width if outline_enabled else 0
@@ -229,7 +359,7 @@ def _draw_caption_chunk(
         widths = []
         heights = []
         for word in line:
-            display_word = word["word"].upper() if preset["uppercase"] else word["word"]
+            display_word = _apply_text_case(word["word"], caption_case)
             is_active = absolute_word_idx_measure == active_index
 
             # FIX: compute the actual font that will be used during render
@@ -311,7 +441,7 @@ def _draw_caption_chunk(
         cursor_x = center_x - line_width // 2
 
         for word in line:
-            display_word = word["word"].upper() if preset["uppercase"] else word["word"]
+            display_word = _apply_text_case(word["word"], caption_case)
             is_active = absolute_word_idx == active_index
             word_font = base_font
             alpha = 255
@@ -446,6 +576,20 @@ def render_caption_preview(
     animation_speed: float = 1.0,
     word_by_word: bool = False,
     fade_in_words: bool = False,
+    hook_text: str = "",
+    show_hook: bool = False,
+    hook_font_name: str | None = None,
+    hook_font_size: int = 52,
+    hook_color: str = "#FFFFFF",
+    hook_outline_enabled: bool = True,
+    hook_outline_color: str = "#000000",
+    hook_outline_width: int = 4,
+    hook_shadow_enabled: bool = True,
+    hook_shadow_color: str = "#000000",
+    hook_shadow_offset: int = 5,
+    hook_position_pct: float = 8.0,
+    caption_case: str = "upper",
+    hook_case: str = "upper",
 ):
     preview = image.convert("RGBA")
     video_info = {"width": preview.width, "height": preview.height}
@@ -504,8 +648,26 @@ def render_caption_preview(
         animation_speed=animation_speed,
         word_by_word=word_by_word,
         fade_in_words=fade_in_words,
+        caption_case=caption_case,
     )
-    return preview.convert("RGB")
+    result = preview.convert("RGB")
+    if show_hook and hook_text and hook_text.strip():
+        result = render_hook(
+            frame=result,
+            hook_text=hook_text,
+            font_name=hook_font_name or font_name,
+            font_size=hook_font_size,
+            text_color=hook_color,
+            outline_enabled=hook_outline_enabled,
+            outline_color=hook_outline_color,
+            outline_width=hook_outline_width,
+            drop_shadow_enabled=hook_shadow_enabled,
+            shadow_color=hook_shadow_color,
+            shadow_offset=hook_shadow_offset,
+            position_pct=hook_position_pct,
+            case_mode=hook_case,
+        )
+    return result
 
 
 def render_caption_frames(
@@ -534,6 +696,7 @@ def render_caption_frames(
     animation_speed: float = 1.0,
     word_by_word: bool = False,
     fade_in_words: bool = False,
+    caption_case: str = "upper",
 ):
     preset = STYLE_PRESETS[style_name]
     frames_dir = (temp_root or TEMP_DIR) / f"caption_frames_{clip_path.stem}"
@@ -586,6 +749,7 @@ def render_caption_frames(
                 animation_speed=animation_speed,
                 word_by_word=word_by_word,
                 fade_in_words=fade_in_words,
+                caption_case=caption_case,
             )
 
         image.save(frames_dir / f"{frame_index:06d}.png")

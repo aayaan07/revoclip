@@ -29,12 +29,12 @@ def _read_worker_events(process, progress_callback, model_name: str):
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
-            print(f"[ClipForge] worker log: {line}", flush=True)
+            print(f"[Revoclip] worker log: {line}", flush=True)
             continue
 
         event_type = event.get("type")
         if event_type == "stage":
-            print(f"[ClipForge] {event.get('message', 'worker stage')}", flush=True)
+            print(f"[Revoclip] {event.get('message', 'worker stage')}", flush=True)
         elif event_type == "progress":
             if progress_callback:
                 progress_callback(float(event.get("value", 0.0)), event.get("message", "Transcribing audio..."))
@@ -42,7 +42,7 @@ def _read_worker_events(process, progress_callback, model_name: str):
             final_complete_event = event
             print(
                 (
-                    f"[ClipForge] transcription complete model={model_name} "
+                    f"[Revoclip] transcription complete model={model_name} "
                     f"device={event.get('device')} compute_type={event.get('compute_type')} "
                     f"elapsed={float(event.get('elapsed_seconds', 0.0)):.1f}s "
                     f"audio_duration={float(event.get('audio_duration', 0.0)):.1f}s "
@@ -68,7 +68,7 @@ def _run_transcription_worker(video_path: Path, output_path: Path, model_name: s
         compute_type,
     ]
     print(
-        f"[ClipForge] transcription start model={model_name} device={device} compute_type={compute_type}",
+        f"[Revoclip] transcription start model={model_name} device={device} compute_type={compute_type}",
         flush=True,
     )
     process = subprocess.Popen(
@@ -85,7 +85,7 @@ def _run_transcription_worker(video_path: Path, output_path: Path, model_name: s
         if complete_event is not None and output_path.exists():
             print(
                 (
-                    f"[ClipForge] transcription worker exited with code {process.returncode} "
+                    f"[Revoclip] transcription worker exited with code {process.returncode} "
                     "after completion event; using completed transcript output"
                 ),
                 flush=True,
@@ -107,7 +107,7 @@ def transcribe_video(video_path: Path, model_name: str | None = None, progress_c
     if cache_path.exists():
         if progress_callback:
             progress_callback(1.0, f"Loaded cached transcript for {model_name}.")
-        print(f"[ClipForge] transcription cache hit file={video_path.name} model={model_name}", flush=True)
+        print(f"[Revoclip] transcription cache hit file={video_path.name} model={model_name}", flush=True)
         return json.loads(cache_path.read_text(encoding="utf-8"))
 
     output_path = cache_path
@@ -127,7 +127,7 @@ def transcribe_video(video_path: Path, model_name: str | None = None, progress_c
             if progress_callback:
                 progress_callback(0.04, f"GPU transcription failed, retrying on CPU... ({primary_exc})")
             print(
-                f"[ClipForge] gpu transcription failed device={WHISPER_DEVICE} compute_type={WHISPER_COMPUTE_TYPE}: {primary_exc}",
+                f"[Revoclip] gpu transcription failed device={WHISPER_DEVICE} compute_type={WHISPER_COMPUTE_TYPE}: {primary_exc}",
                 flush=True,
             )
             return _run_transcription_worker(

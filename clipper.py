@@ -2,7 +2,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from captioner import render_caption_frames
+from PIL import Image
+
+from captioner import render_caption_frames, render_hook
 from config import FFMPEG_PATH, OUTPUT_DIR, TEMP_DIR
 from reframer import build_reframe_filter, get_video_info
 
@@ -104,6 +106,88 @@ def burn_caption_overlay(video_path: Path, overlay_path: Path, destination: Path
     return destination
 
 
+def burn_hook_text(
+    video_path: Path, destination: Path, video_info: dict, caption_settings: dict
+):
+    hook_text = caption_settings.get("hook_text", "")
+    if not hook_text or not hook_text.strip():
+        shutil.copy2(video_path, destination)
+        return destination
+
+    frames_dir = TEMP_DIR / f"{video_path.stem}_hook_frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        extract_result = subprocess.run(
+            [
+                FFMPEG_PATH,
+                "-y",
+                "-i",
+                str(video_path),
+                str(frames_dir / "%06d.png"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if extract_result.returncode != 0:
+            raise RuntimeError(extract_result.stderr or "Hook frame extraction failed")
+
+        for frame_path in sorted(frames_dir.glob("*.png")):
+            with Image.open(frame_path) as frame:
+                hooked = render_hook(
+                    frame=frame.convert("RGB"),
+                    hook_text=hook_text,
+                    font_name=caption_settings.get("hook_font_name")
+                    or caption_settings.get("font_name"),
+                    font_size=caption_settings.get("hook_font_size", 52),
+                    text_color=caption_settings.get("hook_color", "#FFFFFF"),
+                    outline_enabled=caption_settings.get("hook_outline_enabled", True),
+                    outline_color=caption_settings.get("hook_outline_color", "#000000"),
+                    outline_width=caption_settings.get("hook_outline_width", 4),
+                    drop_shadow_enabled=caption_settings.get("hook_shadow_enabled", True),
+                    shadow_color=caption_settings.get("hook_shadow_color", "#000000"),
+                    shadow_offset=caption_settings.get("hook_shadow_offset", 5),
+                    position_pct=caption_settings.get("hook_position_pct", 8.0),
+                    case_mode=caption_settings.get("hook_case", "upper"),
+                )
+                hooked.save(frame_path)
+
+        encode_result = subprocess.run(
+            [
+                FFMPEG_PATH,
+                "-y",
+                "-framerate",
+                f"{video_info['fps']}",
+                "-i",
+                str(frames_dir / "%06d.png"),
+                "-i",
+                str(video_path),
+                "-map",
+                "0:v",
+                "-map",
+                "1:a?",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-shortest",
+                "-movflags",
+                "+faststart",
+                str(destination),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if encode_result.returncode != 0:
+            raise RuntimeError(encode_result.stderr or "Hook video render failed")
+        return destination
+    finally:
+        shutil.rmtree(frames_dir, ignore_errors=True)
+
+
 def render_clip(
     source_video: Path,
     clip_index: int,
@@ -119,6 +203,7 @@ def render_clip(
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     cut_path = TEMP_DIR / f"clip_{clip_index}_cut.mp4"
     reframed_path = TEMP_DIR / f"clip_{clip_index}_reframed.mp4"
+    captioned_path = TEMP_DIR / f"clip_{clip_index}_captioned.mp4"
     final_path = OUTPUT_DIR / f"{clip_prefix}clip_{clip_index}.mp4"
 
     cut_segment(source_video, float(segment["start_time"]), float(segment["end_time"]), cut_path)
@@ -149,8 +234,16 @@ def render_clip(
         animation_speed=caption_settings.get("animation_speed", 1.0),
         word_by_word=caption_settings.get("word_by_word", False),
         fade_in_words=caption_settings.get("fade_in_words", False),
+        caption_case=caption_settings.get("caption_case", "upper"),
     )
-    burn_caption_overlay(reframed_path, overlay_path, final_path)
+    burn_caption_overlay(reframed_path, overlay_path, captioned_path)
+    show_hook = caption_settings.get("show_hook", False)
+    hook_text = caption_settings.get("hook_text", "")
+    if show_hook and hook_text and hook_text.strip():
+        burn_hook_text(captioned_path, final_path, video_info, caption_settings)
+    else:
+        shutil.copy2(captioned_path, final_path)
     shutil.rmtree(frames_dir, ignore_errors=True)
     overlay_path.unlink(missing_ok=True)
+    captioned_path.unlink(missing_ok=True)
     return final_path

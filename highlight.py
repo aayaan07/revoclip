@@ -132,7 +132,7 @@ class HighlightDetector:
             "- The hook should tease the specific idea, opinion, story, or moment "
             "in that clip — a viewer should be able to guess the topic from the "
             "hook alone.\n"
-            "- Format: 4-8 words, punchy, present tense, NO emojis, plain text only.\n"
+            "- Format: 4-8 words (Max 36 characeters), punchy, present tense, NO emojis, plain text only.\n"
             "- Examples of GOOD hooks: 'He quit his job on day one', "
             "'This mistake cost me 50k', 'Nobody talks about this tax trick'\n"
             "- Examples of BAD hooks: 'You Won't Believe This', "
@@ -372,8 +372,8 @@ class HighlightDetector:
                 headers={
                     "Authorization": f"Bearer {self.api_keys.get('openrouter', '')}",
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "https://clipforge.local",
-                    "X-Title": "ClipForge",
+                    "HTTP-Referer": "https://revoclip.local",
+                    "X-Title": "Revoclip",
                 },
                 json={
                     "model": self.model,
@@ -432,7 +432,7 @@ class HighlightDetector:
                     "stream": False,
                     "format": "json",
                 },
-                timeout=120,
+                timeout=300,
             )
             if response.status_code == 404:
                 raise RuntimeError("ollama_model_not_found")

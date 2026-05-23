@@ -3,8 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ClipForge</title>
+    <title>Revoclip</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="icon" href="/favicon.ico?v=1" type="image/x-icon">
+    <link rel="shortcut icon" href="/favicon.ico?v=1" type="image/x-icon">
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
@@ -39,6 +41,10 @@
   --text: #000000;
   --text2: rgba(0, 0, 0, 0.72);
   --text3: rgba(0, 0, 0, 0.45);
+  --toggle-track: #d9d9d9;
+  --toggle-track-border: rgba(0, 0, 0, 0.12);
+  --toggle-thumb: #ffffff;
+  --toggle-thumb-active: #ffffff;
 
   --green: #16a34a;
   --green-s: rgba(22, 163, 74, 0.10);
@@ -73,6 +79,10 @@ body.dark-mode {
   --text: whitesmoke;
   --text2: rgba(245, 245, 245, 0.72);
   --text3: rgba(245, 245, 245, 0.45);
+  --toggle-track: #2c2c2c;
+  --toggle-track-border: rgba(255, 255, 255, 0.16);
+  --toggle-thumb: #f5f5f5;
+  --toggle-thumb-active: #111111;
 
   --green: #22c55e;
   --green-s: rgba(34, 197, 94, 0.12);
@@ -150,14 +160,21 @@ body.dark-mode {
       .logo {
         width: 28px;
         height: 28px;
-        border-radius: 8px;
-        background: var(--accent-s);
-        border: 1px solid rgba(31, 31, 34, 0.2);
+        /* border-radius: 8px; */
+        /* background: var(--accent-s); */
+        /* border: 1px solid rgba(31, 31, 34, 0.2); */
         display: flex;
         align-items: center;
         justify-content: center;
-        color: var(--accent);
+        /* color: var(--accent); */
         flex-shrink: 0;
+      }
+
+      .logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
       }
 
       .brand {
@@ -165,6 +182,29 @@ body.dark-mode {
         font-weight: 700;
         letter-spacing: -0.02em;
         color: var(--text);
+      }
+
+      .docs-btn {
+        height: 30px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border2);
+        background: var(--card);
+        color: var(--text2);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: border-color 0.15s, color 0.15s, background 0.15s;
+      }
+
+      .docs-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--surface);
       }
 
       .badge {
@@ -604,11 +644,11 @@ body.dark-mode {
       .toggle-slider {
         position: absolute;
         inset: 0;
-        background: var(--card2);
+        background: var(--toggle-track);
         border-radius: 9px;
         cursor: pointer;
         transition: background 0.15s;
-        border: 1px solid var(--border2);
+        border: 1px solid var(--toggle-track-border);
       }
 
       .toggle-slider::before {
@@ -618,9 +658,10 @@ body.dark-mode {
         height: 12px;
         left: 2px;
         top: 2px;
-        background: var(--text3);
+        background: var(--toggle-thumb);
         border-radius: 50%;
         transition: transform 0.15s, background 0.15s;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
       }
 
       .toggle input:checked + .toggle-slider {
@@ -630,7 +671,7 @@ body.dark-mode {
 
       .toggle input:checked + .toggle-slider::before {
         transform: translateX(14px);
-        background: #fff;
+        background: var(--toggle-thumb-active);
       }
 
       /* ── accordion ── */
@@ -874,6 +915,7 @@ body.dark-mode {
         margin-top: 4px;
         width: 100%;
         justify-content: center;
+        margin: 0 10px;
       }
 
       #zip-btn:hover {
@@ -953,24 +995,11 @@ body.dark-mode {
       <header>
         <div class="header-left">
           <div class="logo">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-            >
-              <circle cx="6" cy="6" r="3" />
-              <circle cx="6" cy="18" r="3" />
-              <line x1="20" y1="4" x2="8.12" y2="15.88" />
-              <line x1="14.47" y1="14.48" x2="20" y2="20" />
-              <line x1="8.12" y1="8.12" x2="12" y2="12" />
-            </svg>
+            <img src="assets\revoclip-logo2.png" alt="Revoclip logo">
           </div>
-          <span class="brand">ClipForge</span>
+          <span class="brand">Revoclip</span>
           <span class="badge">Beta</span>
+          <a class="docs-btn" href="/docs" target="_blank" rel="noopener noreferrer">Docs</a>
         </div>
 
         <div class="header-center">
@@ -1076,9 +1105,9 @@ body.dark-mode {
 
             <div class="field" id="ollama-model-field" style="display: none">
               <label>Ollama Model</label>
-              <input type="text" id="ollama-model" value="qwen2.5:4b" />
+              <input type="text" id="ollama-model" value="qwen3.5:4b" />
               <div class="hint">
-                Must be pulled first: ollama pull qwen2.5:4b
+                Must be pulled first: ollama pull qwen3.5:4b
               </div>
             </div>
 
@@ -1090,14 +1119,6 @@ body.dark-mode {
                 placeholder="e.g. focus on funny moments, avoid intros"
               />
               <div class="hint">Tell the AI what kind of clips to look for</div>
-            </div>
-
-            <div class="toggle-row">
-              <label for="include-hook">Generate hook text for each clip</label>
-              <label class="toggle">
-                <input type="checkbox" id="include-hook" checked />
-                <span class="toggle-slider"></span>
-              </label>
             </div>
 
             <div class="field">
@@ -1437,6 +1458,185 @@ body.dark-mode {
             </div>
           </div>
 
+          <!-- Hook -->
+          <div class="section" id="hook-section">
+            <div class="section-title">Hook</div>
+
+            <div class="field">
+              <div class="toggle-row">
+                <label for="show-hook">
+                  Generate hook heading
+                  <span class="hint" style="display:inline;margin-left:6px">
+                    AI-generated heading shown at the top of each clip
+                  </span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" id="show-hook" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div id="hook-settings" style="display:none">
+            <div class="field">
+              <label>Preview hook text</label>
+              <input
+                  type="text"
+                  id="hook-preview-text"
+                  value="He quit his job on day one"
+                  placeholder="Hook text for preview only"
+                />
+                <div class="hint">
+                  This is only used for the live preview. Generated clips use
+                  the AI-created hook heading.
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Hook letter case</label>
+                <select id="hook-case">
+                  <option value="upper" selected>ALL CAPITAL</option>
+                  <option value="lower">all small</option>
+                  <option value="title">First Letter Capital</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label>Hook font</label>
+                <div style="display: flex; gap: 7px">
+                  <select id="hook-font" style="flex: 1"></select>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Hook font size</label>
+                <div class="slider-wrap">
+                  <input
+                    type="range"
+                    id="hook-font-size"
+                    min="20"
+                    max="100"
+                    step="1"
+                    value="52"
+                  />
+                  <span class="slider-val" id="hook-font-size-val">52px</span>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Colors</label>
+                <div class="color-row">
+                  <div class="color-field">
+                    <label>Text color</label>
+                    <div class="color-wrap">
+                      <input type="color" id="hook-color" value="#FFFFFF" />
+                      <input
+                        class="hex-input"
+                        id="hook-color-hex"
+                        type="text"
+                        value="#FFFFFF"
+                        maxlength="7"
+                      />
+                    </div>
+                  </div>
+                  <div class="color-field">
+                    <label>Outline color</label>
+                    <div class="color-wrap">
+                      <input
+                        type="color"
+                        id="hook-outline-color"
+                        value="#000000"
+                      />
+                      <input
+                        class="hex-input"
+                        id="hook-outline-color-hex"
+                        type="text"
+                        value="#000000"
+                        maxlength="7"
+                      />
+                    </div>
+                  </div>
+                  <div class="color-field">
+                    <label>Shadow color</label>
+                    <div class="color-wrap">
+                      <input
+                        type="color"
+                        id="hook-shadow-color"
+                        value="#000000"
+                      />
+                      <input
+                        class="hex-input"
+                        id="hook-shadow-color-hex"
+                        type="text"
+                        value="#000000"
+                        maxlength="7"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="toggle-row" style="margin-bottom:6px">
+                <label for="hook-outline-enabled">Enable outline</label>
+                <label class="toggle">
+                  <input type="checkbox" id="hook-outline-enabled" checked />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="field">
+                <label>Outline strength</label>
+                <div class="slider-wrap">
+                  <input
+                    type="range"
+                    id="hook-outline-width"
+                    min="1"
+                    max="15"
+                    step="1"
+                    value="4"
+                  />
+                  <span class="slider-val" id="hook-outline-width-val">4</span>
+                </div>
+              </div>
+
+              <div class="toggle-row" style="margin-bottom:6px">
+                <label for="hook-shadow-enabled">Enable drop shadow</label>
+                <label class="toggle">
+                  <input type="checkbox" id="hook-shadow-enabled" checked />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="field">
+                <label>Shadow distance</label>
+                <div class="slider-wrap">
+                  <input
+                    type="range"
+                    id="hook-shadow-offset"
+                    min="1"
+                    max="20"
+                    step="1"
+                    value="5"
+                  />
+                  <span class="slider-val" id="hook-shadow-offset-val">5</span>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Vertical position (% from top)</label>
+                <div class="slider-wrap">
+                  <input
+                    type="range"
+                    id="hook-position-pct"
+                    min="2"
+                    max="30"
+                    step="1"
+                    value="8"
+                  />
+                  <span class="slider-val" id="hook-position-pct-val">8%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Typography -->
           <div class="section">
             <div class="section-title">Typography</div>
@@ -1510,6 +1710,15 @@ body.dark-mode {
                 />
                 <span class="slider-val" id="font-size-val">72px</span>
               </div>
+            </div>
+
+            <div class="field">
+              <label>Caption letter case</label>
+              <select id="caption-case">
+                <option value="upper" selected>ALL CAPITAL</option>
+                <option value="lower">all small</option>
+                <option value="title">First Letter Capital</option>
+              </select>
             </div>
 
             <div class="field">
@@ -1718,6 +1927,46 @@ body.dark-mode {
           cfg.default_fade_in_words || false;
         document.getElementById("fade-in-field").style.display =
           document.getElementById("word-by-word").checked ? "block" : "none";
+        document.getElementById("caption-case").value =
+          cfg.default_caption_case || "upper";
+        document.getElementById("show-hook").checked =
+          cfg.default_show_hook || false;
+        document.getElementById("hook-settings").style.display =
+          cfg.default_show_hook ? "block" : "none";
+        document.getElementById("hook-case").value =
+          cfg.default_hook_case || "upper";
+        document.getElementById("hook-font-size").value =
+          cfg.default_hook_font_size || 52;
+        document.getElementById("hook-font-size-val").textContent =
+          (cfg.default_hook_font_size || 52) + "px";
+        document.getElementById("hook-color").value =
+          cfg.default_hook_color || "#FFFFFF";
+        document.getElementById("hook-color-hex").value =
+          cfg.default_hook_color || "#FFFFFF";
+        document.getElementById("hook-outline-enabled").checked =
+          cfg.default_hook_outline !== false;
+        document.getElementById("hook-outline-color").value =
+          cfg.default_hook_outline_color || "#000000";
+        document.getElementById("hook-outline-color-hex").value =
+          cfg.default_hook_outline_color || "#000000";
+        document.getElementById("hook-outline-width").value =
+          cfg.default_hook_outline_width || 4;
+        document.getElementById("hook-outline-width-val").textContent =
+          cfg.default_hook_outline_width || 4;
+        document.getElementById("hook-shadow-enabled").checked =
+          cfg.default_hook_shadow !== false;
+        document.getElementById("hook-shadow-color").value =
+          cfg.default_hook_shadow_color || "#000000";
+        document.getElementById("hook-shadow-color-hex").value =
+          cfg.default_hook_shadow_color || "#000000";
+        document.getElementById("hook-shadow-offset").value =
+          cfg.default_hook_shadow_offset || 5;
+        document.getElementById("hook-shadow-offset-val").textContent =
+          cfg.default_hook_shadow_offset || 5;
+        document.getElementById("hook-position-pct").value =
+          cfg.default_hook_position_pct || 8;
+        document.getElementById("hook-position-pct-val").textContent =
+          (cfg.default_hook_position_pct || 8) + "%";
         updateProviderFields(cfg.default_provider);
         setMode("ai_clip");
         bindEvents();
@@ -1767,7 +2016,7 @@ body.dark-mode {
       function renderForgeButton() {
         document.getElementById("forge-btn").innerHTML =
           currentMode === "ai_clip"
-            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Forge Clips`
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Create Clips`
             : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Add Captions`;
       }
 
@@ -1822,20 +2071,32 @@ body.dark-mode {
 
       function populateFonts(fonts) {
         const sel = document.getElementById("font-select");
+        const hookSel = document.getElementById("hook-font");
+        const selectedFont = sel.value;
+        const selectedHookFont = hookSel.value;
         sel.innerHTML = "";
+        hookSel.innerHTML = "";
         if (!fonts.length) {
           const o = document.createElement("option");
           o.value = "";
           o.textContent = "No fonts found in fonts/";
           sel.appendChild(o);
+          hookSel.appendChild(o.cloneNode(true));
           return;
         }
         fonts.forEach((f, i) => {
           const o = document.createElement("option");
           o.value = f;
           o.textContent = f;
-          if (i === 0) o.selected = true;
+          if (f === selectedFont || (!selectedFont && i === 0)) o.selected = true;
           sel.appendChild(o);
+          const hookOption = document.createElement("option");
+          hookOption.value = f;
+          hookOption.textContent = f;
+          if (f === selectedHookFont || (!selectedHookFont && i === 0)) {
+            hookOption.selected = true;
+          }
+          hookSel.appendChild(hookOption);
         });
       }
 
@@ -1949,10 +2210,6 @@ body.dark-mode {
         add("min_duration", document.getElementById("min-duration").value);
         add("max_duration", document.getElementById("max-duration").value);
         add("user_guidance", document.getElementById("user-guidance").value);
-        add(
-          "include_hook",
-          document.getElementById("include-hook").checked ? "true" : "false"
-        );
         add("aspect_ratio", pillVal("aspect-pills"));
         add("zoom", document.getElementById("zoom").value);
         add("reframe_mode", pillVal("reframe-pills"));
@@ -1984,6 +2241,55 @@ body.dark-mode {
         );
         add("font_name", document.getElementById("font-select").value);
         add("font_size", document.getElementById("font-size").value);
+        add("caption_case", document.getElementById("caption-case").value);
+        add(
+          "show_hook",
+          document.getElementById("show-hook").checked ? "true" : "false"
+        );
+        add(
+          "include_hook",
+          document.getElementById("show-hook").checked ? "true" : "false"
+        );
+        add(
+          "hook_text_preview",
+          document.getElementById("hook-preview-text").value
+        );
+        add("hook_font_name", document.getElementById("hook-font").value);
+        add("hook_font_size", document.getElementById("hook-font-size").value);
+        add("hook_color", document.getElementById("hook-color").value);
+        add(
+          "hook_outline_enabled",
+          document.getElementById("hook-outline-enabled").checked
+            ? "true"
+            : "false"
+        );
+        add(
+          "hook_outline_color",
+          document.getElementById("hook-outline-color").value
+        );
+        add(
+          "hook_outline_width",
+          document.getElementById("hook-outline-width").value
+        );
+        add(
+          "hook_shadow_enabled",
+          document.getElementById("hook-shadow-enabled").checked
+            ? "true"
+            : "false"
+        );
+        add(
+          "hook_shadow_color",
+          document.getElementById("hook-shadow-color").value
+        );
+        add(
+          "hook_shadow_offset",
+          document.getElementById("hook-shadow-offset").value
+        );
+        add(
+          "hook_position_pct",
+          document.getElementById("hook-position-pct").value
+        );
+        add("hook_case", document.getElementById("hook-case").value);
         add("caption_effect", document.getElementById("caption-effect").value);
         add("animation_speed", pillVal("speed-pills"));
         add(
@@ -2261,6 +2567,10 @@ body.dark-mode {
         [
           ["zoom", "zoom-val", (v) => parseFloat(v).toFixed(2) + "x"],
           ["caption-pos", "caption-pos-val", (v) => v + "%"],
+          ["hook-font-size", "hook-font-size-val", (v) => v + "px"],
+          ["hook-outline-width", "hook-outline-width-val", (v) => v],
+          ["hook-shadow-offset", "hook-shadow-offset-val", (v) => v],
+          ["hook-position-pct", "hook-position-pct-val", (v) => v + "%"],
           ["bg-opacity", "bg-opacity-val", (v) => v + "%"],
           ["outline-width", "outline-width-val", (v) => v],
           ["shadow-offset", "shadow-offset-val", (v) => v],
@@ -2293,6 +2603,9 @@ body.dark-mode {
         syncColor("bg-color", "bg-hex");
         syncColor("outline-color", "outline-hex");
         syncColor("shadow-color", "shadow-hex");
+        syncColor("hook-color", "hook-color-hex");
+        syncColor("hook-outline-color", "hook-outline-color-hex");
+        syncColor("hook-shadow-color", "hook-shadow-color-hex");
 
         // toggles + selects
         ["outline-enabled", "shadow-enabled"].forEach((id) => {
@@ -2300,6 +2613,22 @@ body.dark-mode {
             .getElementById(id)
             .addEventListener("change", schedulePreview);
         });
+        document
+          .getElementById("show-hook")
+          .addEventListener("change", function () {
+            document.getElementById("hook-settings").style.display =
+              this.checked ? "block" : "none";
+            schedulePreview();
+          });
+        ["hook-outline-enabled", "hook-shadow-enabled"].forEach((id) => {
+          document.getElementById(id).addEventListener("change", schedulePreview);
+        });
+        document
+          .getElementById("hook-preview-text")
+          .addEventListener("input", schedulePreview);
+        document
+          .getElementById("hook-font")
+          .addEventListener("change", schedulePreview);
         document
           .getElementById("word-by-word")
           .addEventListener("change", function () {
@@ -2312,6 +2641,8 @@ body.dark-mode {
           .addEventListener("change", schedulePreview);
         [
           "font-select",
+          "caption-case",
+          "hook-case",
           "caption-effect",
           "dl-quality",
           "whisper-model",

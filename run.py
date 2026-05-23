@@ -1,5 +1,5 @@
 """
-ClipForge — FastAPI backend
+Revoclip — FastAPI backend
 Run with:  python run.py
 Then open:  http://localhost:7860
 """
@@ -29,9 +29,13 @@ from captioner import ANIMATION_SPEEDS, render_caption_preview, resolve_font
 from clipper import render_clip
 from config import (
     ANIMATION_SPEED_OPTIONS, DEFAULT_ANIMATION_SPEED, DEFAULT_CAPTION_EFFECT,
-    DEFAULT_CAPTION_STYLE, DEFAULT_DOWNLOAD_QUALITY, DEFAULT_FONT_SIZE,
+    DEFAULT_CAPTION_CASE, DEFAULT_CAPTION_STYLE, DEFAULT_DOWNLOAD_QUALITY, DEFAULT_FONT_SIZE,
     DEFAULT_FADE_IN_WORDS,
     DEFAULT_GEMINI_MODEL, DEFAULT_GROQ_MODEL, DEFAULT_LINES_PER_SUBTITLE,
+    DEFAULT_HOOK_CASE, DEFAULT_HOOK_COLOR, DEFAULT_HOOK_FONT_SIZE, DEFAULT_HOOK_OUTLINE,
+    DEFAULT_HOOK_OUTLINE_COLOR, DEFAULT_HOOK_OUTLINE_WIDTH,
+    DEFAULT_HOOK_POSITION_PCT, DEFAULT_HOOK_SHADOW, DEFAULT_HOOK_SHADOW_COLOR,
+    DEFAULT_HOOK_SHADOW_OFFSET, DEFAULT_SHOW_HOOK,
     DEFAULT_MAX_DURATION, DEFAULT_MIN_DURATION, DEFAULT_NUM_CLIPS,
     DEFAULT_OLLAMA_MODEL, DEFAULT_OPENROUTER_MODEL, DEFAULT_POSITION, DEFAULT_PROVIDER,
     DEFAULT_REFRAME_MODE, DEFAULT_WORD_BY_WORD, DEFAULT_WORDS_PER_LINE, DEFAULT_ZOOM,
@@ -56,11 +60,14 @@ for _s in ("stdout", "stderr"):
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 FONTS_DIR.mkdir(parents=True, exist_ok=True)
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
 PREVIEW_FALLBACK_PATH = Path(__file__).resolve().with_name("preview-temp.png")
 
-app = FastAPI(title="ClipForge")
+app = FastAPI(title="Revoclip")
 app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
+app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 
 def list_fonts() -> list[str]:
@@ -80,7 +87,7 @@ def clean_temp_dir():
 def build_zip_from_files(files: list[Path]) -> Path | None:
     if not files:
         return None
-    zip_path = OUTPUT_DIR / f"clipforge_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    zip_path = OUTPUT_DIR / f"revoclip_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as arc:
         for f in files:
             arc.write(f, arcname=f.name)
@@ -94,7 +101,7 @@ def pil_to_b64(img: Image.Image) -> str:
 
 
 def log(msg: str):
-    print(f"[ClipForge] {msg}", flush=True)
+    print(f"[Revoclip] {msg}", flush=True)
 
 
 def sse(event: str, data: dict) -> str:
@@ -105,6 +112,12 @@ def sse(event: str, data: dict) -> str:
 async def index():
     html = (Path(__file__).resolve().parent / "index.html").read_text(encoding="utf-8")
     return HTMLResponse(content=html)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    favicon_path = ASSETS_DIR / "favicon.ico"
+    return FileResponse(str(favicon_path), media_type="image/x-icon")
 
 
 @app.get("/api/config")
@@ -137,6 +150,18 @@ async def get_config():
         "default_words": DEFAULT_WORDS_PER_LINE,
         "default_lines": DEFAULT_LINES_PER_SUBTITLE,
         "default_font_size": DEFAULT_FONT_SIZE,
+        "default_caption_case": DEFAULT_CAPTION_CASE,
+        "default_show_hook": DEFAULT_SHOW_HOOK,
+        "default_hook_case": DEFAULT_HOOK_CASE,
+        "default_hook_font_size": DEFAULT_HOOK_FONT_SIZE,
+        "default_hook_color": DEFAULT_HOOK_COLOR,
+        "default_hook_outline": DEFAULT_HOOK_OUTLINE,
+        "default_hook_outline_color": DEFAULT_HOOK_OUTLINE_COLOR,
+        "default_hook_outline_width": DEFAULT_HOOK_OUTLINE_WIDTH,
+        "default_hook_shadow": DEFAULT_HOOK_SHADOW,
+        "default_hook_shadow_color": DEFAULT_HOOK_SHADOW_COLOR,
+        "default_hook_shadow_offset": DEFAULT_HOOK_SHADOW_OFFSET,
+        "default_hook_position_pct": DEFAULT_HOOK_POSITION_PCT,
         "default_effect": DEFAULT_CAPTION_EFFECT,
         "default_animation_speed": DEFAULT_ANIMATION_SPEED,
         "default_word_by_word": DEFAULT_WORD_BY_WORD,
@@ -191,8 +216,22 @@ async def preview(request: Request):
         rm = normalize_reframe_mode(g("reframe_mode", DEFAULT_REFRAME_MODE))
         animation_speed_name = g("animation_speed", DEFAULT_ANIMATION_SPEED)
         animation_speed = ANIMATION_SPEEDS.get(animation_speed_name, 1.0)
+        caption_case = g("caption_case", DEFAULT_CAPTION_CASE)
         word_by_word = g("word_by_word", "false").lower() == "true"
         fade_in_words = g("fade_in_words", "false").lower() == "true"
+        show_hook = g("show_hook", "false").lower() == "true"
+        hook_text_preview = g("hook_text_preview", "He quit his job on day one")
+        hook_font_name = g("hook_font_name", "") or None
+        hook_font_size = int(g("hook_font_size", str(DEFAULT_HOOK_FONT_SIZE)))
+        hook_color = g("hook_color", DEFAULT_HOOK_COLOR)
+        hook_outline_enabled = g("hook_outline_enabled", "true").lower() == "true"
+        hook_outline_color = g("hook_outline_color", DEFAULT_HOOK_OUTLINE_COLOR)
+        hook_outline_width = int(g("hook_outline_width", str(DEFAULT_HOOK_OUTLINE_WIDTH)))
+        hook_shadow_enabled = g("hook_shadow_enabled", "true").lower() == "true"
+        hook_shadow_color = g("hook_shadow_color", DEFAULT_HOOK_SHADOW_COLOR)
+        hook_shadow_offset = int(g("hook_shadow_offset", str(DEFAULT_HOOK_SHADOW_OFFSET)))
+        hook_position_pct = float(g("hook_position_pct", str(DEFAULT_HOOK_POSITION_PCT)))
+        hook_case = g("hook_case", DEFAULT_HOOK_CASE)
         base_image = None
 
         upload_id = g("upload_id")
@@ -227,6 +266,20 @@ async def preview(request: Request):
             caption_position_pct=float(g("caption_position_pct", "78")),
             word_by_word=word_by_word,
             fade_in_words=fade_in_words,
+            caption_case=caption_case,
+            hook_text=hook_text_preview,
+            show_hook=show_hook,
+            hook_font_name=hook_font_name,
+            hook_font_size=hook_font_size,
+            hook_color=hook_color,
+            hook_outline_enabled=hook_outline_enabled,
+            hook_outline_color=hook_outline_color,
+            hook_outline_width=hook_outline_width,
+            hook_shadow_enabled=hook_shadow_enabled,
+            hook_shadow_color=hook_shadow_color,
+            hook_shadow_offset=hook_shadow_offset,
+            hook_position_pct=hook_position_pct,
+            hook_case=hook_case,
         )
         return JSONResponse({"ok": True, "image": pil_to_b64(result)})
     except Exception as e:
@@ -264,8 +317,21 @@ async def process(request: Request):
     caption_effect       = g("caption_effect", DEFAULT_CAPTION_EFFECT)
     animation_speed_name = g("animation_speed", DEFAULT_ANIMATION_SPEED)
     animation_speed      = ANIMATION_SPEEDS.get(animation_speed_name, 1.0)
+    caption_case         = g("caption_case", DEFAULT_CAPTION_CASE)
     word_by_word         = g("word_by_word", "false").lower() == "true"
     fade_in_words        = g("fade_in_words", "false").lower() == "true"
+    show_hook            = g("show_hook", "false").lower() == "true"
+    hook_font_name       = g("hook_font_name", "")
+    hook_font_size       = int(g("hook_font_size", str(DEFAULT_HOOK_FONT_SIZE)))
+    hook_color           = g("hook_color", DEFAULT_HOOK_COLOR)
+    hook_outline_enabled = g("hook_outline_enabled", "true").lower() == "true"
+    hook_outline_color   = g("hook_outline_color", DEFAULT_HOOK_OUTLINE_COLOR)
+    hook_outline_width   = int(g("hook_outline_width", str(DEFAULT_HOOK_OUTLINE_WIDTH)))
+    hook_shadow_enabled  = g("hook_shadow_enabled", "true").lower() == "true"
+    hook_shadow_color    = g("hook_shadow_color", DEFAULT_HOOK_SHADOW_COLOR)
+    hook_shadow_offset   = int(g("hook_shadow_offset", str(DEFAULT_HOOK_SHADOW_OFFSET)))
+    hook_position_pct    = float(g("hook_position_pct", str(DEFAULT_HOOK_POSITION_PCT)))
+    hook_case            = g("hook_case", DEFAULT_HOOK_CASE)
     mode                 = g("mode", "captions_only")
     provider             = g("provider", DEFAULT_PROVIDER)
     groq_model           = g("groq_model", DEFAULT_GROQ_MODEL)
@@ -276,7 +342,7 @@ async def process(request: Request):
     min_dur              = int(g("min_duration", str(DEFAULT_MIN_DURATION)))
     max_dur              = int(g("max_duration", str(DEFAULT_MAX_DURATION)))
     user_guidance        = g("user_guidance", "")
-    include_hook         = g("include_hook", "true").lower() == "true"
+    include_hook         = show_hook
 
     num_clips = max(1, min(num_clips, 25))
     min_dur = max(15, min_dur)
@@ -292,6 +358,34 @@ async def process(request: Request):
     async def event_stream():
         had_errors = False
         clip_paths: list[Path] = []
+        caption_settings = {
+            "style": caption_style, "font_name": font_name or None,
+            "font_size": font_size, "active_color": active_color,
+            "inactive_color": inactive_color,
+            "background_color": background_color if background_opacity > 0 else None,
+            "background_opacity": background_opacity, "position": "Bottom",
+            "words_per_line": words_per_line, "lines_per_subtitle": lines_per_subtitle,
+            "effect": caption_effect, "animation_speed": animation_speed,
+            "word_by_word": word_by_word, "fade_in_words": fade_in_words,
+            "caption_case": caption_case,
+            "outline_enabled": outline_enabled,
+            "outline_color": outline_color, "outline_width": outline_width,
+            "drop_shadow_enabled": drop_shadow_enabled, "shadow_color": shadow_color,
+            "shadow_offset": shadow_offset, "caption_position_pct": caption_position_pct,
+            "show_hook": show_hook,
+            "hook_font_name": hook_font_name or None,
+            "hook_font_size": hook_font_size,
+            "hook_color": hook_color,
+            "hook_outline_enabled": hook_outline_enabled,
+            "hook_outline_color": hook_outline_color,
+            "hook_outline_width": hook_outline_width,
+            "hook_shadow_enabled": hook_shadow_enabled,
+            "hook_shadow_color": hook_shadow_color,
+            "hook_shadow_offset": hook_shadow_offset,
+            "hook_position_pct": hook_position_pct,
+            "hook_case": hook_case,
+            "hook_text": "",
+        }
 
         try:
             _, resolved = resolve_font(font_name or None, caption_style, DEFAULT_FONT_SIZE)
@@ -396,25 +490,15 @@ async def process(request: Request):
                 yield sse("status", {"msg": f"✂️ Found {len(highlights)} highlight(s). Starting render..."})
                 yield sse("progress", {"value": 62})
 
-            caption_settings = {
-                "style": caption_style, "font_name": font_name or None,
-                "font_size": font_size, "active_color": active_color,
-                "inactive_color": inactive_color,
-                "background_color": background_color if background_opacity > 0 else None,
-                "background_opacity": background_opacity, "position": "Bottom",
-                "words_per_line": words_per_line, "lines_per_subtitle": lines_per_subtitle,
-                "effect": caption_effect, "animation_speed": animation_speed,
-                "word_by_word": word_by_word, "fade_in_words": fade_in_words,
-                "outline_enabled": outline_enabled,
-                "outline_color": outline_color, "outline_width": outline_width,
-                "drop_shadow_enabled": drop_shadow_enabled, "shadow_color": shadow_color,
-                "shadow_offset": shadow_offset, "caption_position_pct": caption_position_pct,
-            }
             ar_value = normalize_aspect_ratio(aspect_ratio)
             clip_prefix = "captions_only_" if mode == "captions_only" else "clip_"
 
             for idx, segment in enumerate(highlights, start=1):
                 n = len(highlights)
+                clip_caption_settings = {
+                    **caption_settings,
+                    "hook_text": segment.get("hook", "") if show_hook else "",
+                }
                 base_pct = 65 + int((idx - 1) / max(n, 1) * 28)
                 yield sse("progress", {"value": base_pct})
                 yield sse("status", {"msg": f"✂️ Cutting clip {idx} of {n}..."})
@@ -424,7 +508,7 @@ async def process(request: Request):
                 try:
                     clip_path = await loop.run_in_executor(
                         None,
-                        lambda seg=segment, i=idx: render_clip(
+                        lambda seg=segment, i=idx, clip_settings=clip_caption_settings: render_clip(
                             source_video=source_video,
                             clip_index=i,
                             segment=seg,
@@ -432,7 +516,7 @@ async def process(request: Request):
                             aspect_ratio=ar_value,
                             zoom=zoom,
                             reframe_mode=normalize_reframe_mode(reframe_mode),
-                            caption_settings={**caption_settings, "hook_text": seg.get("hook", "")},
+                            caption_settings=clip_settings,
                             clip_prefix=clip_prefix,
                         ),
                     )
