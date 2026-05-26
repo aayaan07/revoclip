@@ -1,7 +1,6 @@
 # Revoclip
 
 Revoclip is a local FastAPI-based short-form video clipping tool that helps you turn a long video into captioned vertical clips. You can paste a YouTube URL or upload a local video, transcribe it with Whisper, optionally let AI find the best highlight moments, and export ready-to-post MP4 clips with styled captions.
-![Visitor Count](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FYOURUSERNAME%2FYOURREPO&count_bg=%23000000&title_bg=%23555555&icon=github.svg&icon_color=%23FFFFFF&title=visitors&edge_flat=true)
 
 ## Main Features
 
@@ -44,12 +43,16 @@ If FFmpeg is not detected correctly on your machine, install FFmpeg and make sur
 
 ## Installation
 
-### Option 1: Quick setup on Windows
+Clone the repository first:
+```bash
+git clone https://github.com/aayaan07/revoclip.git
+cd revoclip
+```
 
-1. Open the project folder in Command Prompt or PowerShell.
+### Option 1: Quick setup (Windows)
+1. Open the project folder in Command Prompt or PowerShell
 2. Run:
-
-```powershell
+```bat
 setup.bat
 ```
 
