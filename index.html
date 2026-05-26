@@ -2060,6 +2060,8 @@ body.dark-mode {
           .classList.toggle("active", mode === "ai_clip");
         document.getElementById("ai-section").style.display =
           mode === "ai_clip" ? "block" : "none";
+        document.getElementById("hook-section").style.display =
+          mode === "captions_only" ? "none" : "block";
         renderForgeButton();
       }
 
